@@ -23,10 +23,18 @@ function formatDuration(durationSeconds: number): string {
   return `${hours}h ${minutes}m`;
 }
 
+function formatMiles(miles: number): string {
+  if (!Number.isFinite(miles)) return '—';
+  if (miles < 10) return `${miles.toFixed(1)} mi`;
+  return `${Math.round(miles)} mi`;
+}
+
 export default function RoutePlanner({ route, loading, error, onPlanRoute, onClearRoute }: Props) {
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [waypoints, setWaypoints] = useState<string[]>([]);
+
+  const routeStations = useMemo(() => route?.stations ?? [], [route]);
 
   const canSubmit = useMemo(() => {
     return start.trim().length > 0 && end.trim().length > 0 && !loading;
@@ -155,6 +163,43 @@ export default function RoutePlanner({ route, loading, error, onPlanRoute, onCle
               <span className="text-slate-300">Duration</span>
               <span className="font-medium">{formatDuration(route.summary.duration_seconds)}</span>
             </div>
+            <div className="flex justify-between mt-1">
+              <span className="text-slate-300">Stations (≤ {route.corridor_miles ?? 15} mi)</span>
+              <span className="font-medium">{routeStations.length}</span>
+            </div>
+          </div>
+        )}
+
+        {route && (
+          <div className="text-xs text-slate-200 bg-slate-800/40 border border-slate-700 rounded-md">
+            {routeStations.length === 0 ? (
+              <div className="px-3 py-2 text-slate-300">
+                No EA stations found within {route.corridor_miles ?? 15} miles of this route.
+              </div>
+            ) : (
+              <div className="max-h-56 overflow-auto divide-y divide-slate-700">
+                {routeStations.map((station, idx) => (
+                  <div key={`${station.id}-${idx}`} className="px-3 py-2">
+                    <div className="flex justify-between gap-3">
+                      <div className="font-medium text-slate-100 truncate">
+                        {idx + 1}. {station.station_name}
+                      </div>
+                      <div className="shrink-0 text-slate-200">
+                        +{formatMiles(station.distance_from_prev_miles)}
+                      </div>
+                    </div>
+                    <div className="mt-0.5 flex justify-between gap-3 text-slate-400">
+                      <div className="truncate">
+                        {station.city}, {station.state}
+                      </div>
+                      <div className="shrink-0">
+                        off-route {formatMiles(station.distance_to_route_miles)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -169,4 +214,3 @@ export default function RoutePlanner({ route, loading, error, onPlanRoute, onCle
     </div>
   );
 }
-

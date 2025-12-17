@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { fetchRoute, fetchStations, fetchStationCount } from './services/api';
 import type { Station } from './types/station';
-import type { RouteResponse } from './types/route';
+import type { RouteResponse, RouteStation } from './types/route';
 import RoutePlanner from './components/RoutePlanner';
 
 // Fix Leaflet marker icons
@@ -19,6 +19,13 @@ L.Icon.Default.mergeOptions({
 
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795]; // Center of US
 const DEFAULT_ZOOM = 4;
+const ROUTE_CORRIDOR_MILES = 15;
+
+function formatMiles(miles: number): string {
+  if (!Number.isFinite(miles)) return '';
+  if (miles < 10) return miles.toFixed(1);
+  return `${Math.round(miles)}`;
+}
 
 function FitRouteBounds({ geometry }: { geometry: [number, number][] }) {
   const map = useMap();
@@ -32,6 +39,22 @@ function FitRouteBounds({ geometry }: { geometry: [number, number][] }) {
   return null;
 }
 
+function MapZoomTracker({ onZoomChange }: { onZoomChange: (zoom: number) => void }) {
+  const map = useMap();
+
+  useEffect(() => {
+    onZoomChange(map.getZoom());
+  }, [map, onZoomChange]);
+
+  useMapEvents({
+    zoomend: () => {
+      onZoomChange(map.getZoom());
+    },
+  });
+
+  return null;
+}
+
 function App() {
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,10 +63,15 @@ function App() {
   const [route, setRoute] = useState<RouteResponse | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
+  const [mapZoom, setMapZoom] = useState<number>(DEFAULT_ZOOM);
 
   const routeStops = useMemo(() => {
     if (!route) return [];
     return route.points.map((p) => ({ ...p, position: [p.lat, p.lng] as [number, number] }));
+  }, [route]);
+
+  const routeStations = useMemo<RouteStation[]>(() => {
+    return route?.stations ?? [];
   }, [route]);
 
   useEffect(() => {
@@ -72,7 +100,7 @@ function App() {
     setRouteLoading(true);
     setRouteError(null);
     try {
-      const data = await fetchRoute(params.start, params.end, params.waypoints);
+      const data = await fetchRoute(params.start, params.end, params.waypoints, ROUTE_CORRIDOR_MILES);
       setRoute(data);
     } catch (err) {
       setRouteError(err instanceof Error ? err.message : 'Failed to plan route');
@@ -128,6 +156,7 @@ function App() {
           className="h-full w-full"
           scrollWheelZoom={true}
         >
+          <MapZoomTracker onZoomChange={setMapZoom} />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -155,23 +184,57 @@ function App() {
             </>
           )}
 
-          {stations.map((station) => (
-            <Marker key={station.id} position={[station.latitude, station.longitude]}>
-              <Popup>
-                <div className="min-w-[200px]">
-                  <h3 className="font-bold text-slate-900">{station.station_name}</h3>
-                  <p className="text-slate-600 text-sm">
-                    {station.street_address}<br />
-                    {station.city}, {station.state} {station.zip}
-                  </p>
-                  <div className="mt-2 text-sm">
-                    <p><strong>Chargers:</strong> {station.ev_dc_fast_num} DC Fast</p>
-                    <p><strong>Type:</strong> {station.facility_type}</p>
+          {route ? (
+            routeStations.map((station, idx) => (
+              <Marker key={`route-station-${station.id}-${idx}`} position={[station.latitude, station.longitude]}>
+                <Tooltip
+                  permanent={mapZoom >= 9}
+                  direction="top"
+                  offset={[0, -10]}
+                  opacity={0.9}
+                >
+                  {idx === 0
+                    ? `+${formatMiles(station.distance_from_prev_miles)} mi from start`
+                    : `+${formatMiles(station.distance_from_prev_miles)} mi`}
+                </Tooltip>
+                <Popup>
+                  <div className="min-w-[220px]">
+                    <h3 className="font-bold text-slate-900">{station.station_name}</h3>
+                    <p className="text-slate-600 text-sm">
+                      {station.street_address}<br />
+                      {station.city}, {station.state} {station.zip}
+                    </p>
+                    <div className="mt-2 text-sm">
+                      <p><strong>Chargers:</strong> {station.ev_dc_fast_num} DC Fast</p>
+                      <p><strong>Max:</strong> {station.max_power_kw ?? '—'} kW</p>
+                      <p><strong>Off-route:</strong> {formatMiles(station.distance_to_route_miles)} mi</p>
+                      <p><strong>Mile marker:</strong> {formatMiles(station.distance_along_route_miles)} mi</p>
+                      <p><strong>From prev:</strong> {formatMiles(station.distance_from_prev_miles)} mi</p>
+                      <p><strong>To next:</strong> {formatMiles(station.distance_to_next_miles)} mi</p>
+                    </div>
                   </div>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+                </Popup>
+              </Marker>
+            ))
+          ) : (
+            stations.map((station) => (
+              <Marker key={station.id} position={[station.latitude, station.longitude]}>
+                <Popup>
+                  <div className="min-w-[200px]">
+                    <h3 className="font-bold text-slate-900">{station.station_name}</h3>
+                    <p className="text-slate-600 text-sm">
+                      {station.street_address}<br />
+                      {station.city}, {station.state} {station.zip}
+                    </p>
+                    <div className="mt-2 text-sm">
+                      <p><strong>Chargers:</strong> {station.ev_dc_fast_num} DC Fast</p>
+                      <p><strong>Type:</strong> {station.facility_type}</p>
+                    </div>
+                  </div>
+                </Popup>
+              </Marker>
+            ))
+          )}
         </MapContainer>
       </div>
     </div>

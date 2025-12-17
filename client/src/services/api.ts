@@ -6,14 +6,15 @@ const API_BASE = '/api';
 export async function fetchRoute(
   start: string,
   end: string,
-  waypoints: string[] = []
+  waypoints: string[] = [],
+  corridorMiles: number = 15
 ): Promise<RouteResponse> {
   const response = await fetch(`${API_BASE}/route`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ start, end, waypoints }),
+    body: JSON.stringify({ start, end, waypoints, corridorMiles, includeStations: true }),
   });
 
   if (!response.ok) {

@@ -28,3 +28,7 @@ npm-debug.log*
 
 # Vite
 .vite
+
+# Documentation with credentials
+.ev_mapping_app.md
+.EV_PLANNING.md

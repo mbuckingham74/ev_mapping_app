@@ -20,6 +20,7 @@ RUN npm install --omit=dev
 
 # Copy built app
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/migrations ./migrations
 
 EXPOSE 3001
 

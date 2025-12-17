@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ea-planner-postgres-dev
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${DB_NAME:-ea_planner}
+      - POSTGRES_USER=${DB_USER:-ea_planner}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ea_planner} -d ${DB_NAME:-ea_planner}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data_dev:
+

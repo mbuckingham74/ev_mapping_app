@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
+    "migrate": "node dist/scripts/migrate.js",
+    "migrate:dev": "tsx src/scripts/migrate.ts",
     "start": "node dist/index.js",
-    "fetch:stations": "tsx scripts/fetch-stations.ts"
+    "fetch:stations": "tsx src/scripts/fetch-stations.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",

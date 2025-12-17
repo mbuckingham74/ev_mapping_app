@@ -1,10 +1,22 @@
 import { useMemo, useState } from 'react';
 import type { RouteResponse } from '../types/route';
+import type { SavedRoute } from '../types/savedRoute';
 
 type Props = {
   route: RouteResponse | null;
   loading: boolean;
   error: string | null;
+  selectedStationId?: number | null;
+  initialParams?: {
+    start: string;
+    end: string;
+    waypoints: string[];
+    corridorMiles: number;
+    preference: 'fastest' | 'charger_optimized';
+  } | null;
+  savedRoutes?: SavedRoute[];
+  savedRoutesLoading?: boolean;
+  savedRoutesError?: string | null;
   onPlanRoute: (params: {
     start: string;
     end: string;
@@ -13,6 +25,16 @@ type Props = {
     preference: 'fastest' | 'charger_optimized';
   }) => Promise<void>;
   onClearRoute: () => void;
+  onSelectStation?: (stationId: number) => void;
+  onSaveRoute?: (params: {
+    name?: string;
+    start: string;
+    end: string;
+    waypoints: string[];
+    corridorMiles: number;
+    preference: 'fastest' | 'charger_optimized';
+  }) => Promise<void>;
+  onLoadSavedRoute?: (id: number) => Promise<void>;
 };
 
 function formatDistanceMiles(meters: number): string {
@@ -35,12 +57,32 @@ function formatMiles(miles: number): string {
   return `${Math.round(miles)} mi`;
 }
 
-export default function RoutePlanner({ route, loading, error, onPlanRoute, onClearRoute }: Props) {
-  const [start, setStart] = useState('');
-  const [end, setEnd] = useState('');
-  const [waypoints, setWaypoints] = useState<string[]>([]);
-  const [corridorMiles, setCorridorMiles] = useState<number>(30);
-  const [preference, setPreference] = useState<'fastest' | 'charger_optimized'>('fastest');
+export default function RoutePlanner({
+  route,
+  loading,
+  error,
+  selectedStationId,
+  initialParams,
+  savedRoutes,
+  savedRoutesLoading,
+  savedRoutesError,
+  onPlanRoute,
+  onClearRoute,
+  onSelectStation,
+  onSaveRoute,
+  onLoadSavedRoute,
+}: Props) {
+  const [start, setStart] = useState(initialParams?.start ?? '');
+  const [end, setEnd] = useState(initialParams?.end ?? '');
+  const [waypoints, setWaypoints] = useState<string[]>(initialParams?.waypoints ?? []);
+  const [corridorMiles, setCorridorMiles] = useState<number>(initialParams?.corridorMiles ?? 30);
+  const [preference, setPreference] = useState<'fastest' | 'charger_optimized'>(initialParams?.preference ?? 'fastest');
+  const [saveName, setSaveName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [showSavedRoutes, setShowSavedRoutes] = useState(false);
 
   const routeStations = useMemo(() => route?.stations ?? [], [route]);
 
@@ -58,6 +100,73 @@ export default function RoutePlanner({ route, loading, error, onPlanRoute, onCle
       corridorMiles,
       preference,
     });
+  }
+
+  async function handleCopyLink() {
+    try {
+      const qs = new URLSearchParams(window.location.search);
+      const hasSavedLink = qs.has('saved');
+
+      let url = window.location.href;
+      if (!hasSavedLink) {
+        const startTrimmed = start.trim();
+        const endTrimmed = end.trim();
+        if (startTrimmed && endTrimmed) {
+          const next = new URLSearchParams();
+          next.set('start', startTrimmed);
+          next.set('end', endTrimmed);
+          for (const wp of waypoints.map((w) => w.trim()).filter(Boolean)) {
+            next.append('wp', wp);
+          }
+          next.set('corridor', String(corridorMiles));
+          next.set('pref', preference);
+          url = `${window.location.origin}${window.location.pathname}?${next.toString()}`;
+        }
+      }
+
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to copy';
+      setSaveError(message);
+    }
+  }
+
+  async function handleSave() {
+    if (!onSaveRoute) return;
+    if (!start.trim() || !end.trim()) return;
+
+    setSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
+    try {
+      await onSaveRoute({
+        name: saveName.trim() ? saveName.trim() : undefined,
+        start: start.trim(),
+        end: end.trim(),
+        waypoints: waypoints.map((w) => w.trim()).filter(Boolean),
+        corridorMiles,
+        preference,
+      });
+      setSaveSuccess(true);
+      window.setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save route');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleLoadSavedRoute(id: number) {
+    if (!onLoadSavedRoute) return;
+    setSaveError(null);
+    try {
+      await onLoadSavedRoute(id);
+      setShowSavedRoutes(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to load saved route');
+    }
   }
 
   function addWaypoint() {
@@ -237,6 +346,95 @@ export default function RoutePlanner({ route, loading, error, onPlanRoute, onCle
           </div>
         )}
 
+        {(route || start.trim() || end.trim()) && (
+          <div className="text-xs text-slate-200 bg-slate-800/40 border border-slate-700 rounded-md px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="font-medium text-slate-100">Share & save</div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-700"
+                >
+                  {copied ? 'Copied' : 'Copy link'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSavedRoutes((v) => !v)}
+                  className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-700"
+                >
+                  Saved routes
+                </button>
+              </div>
+            </div>
+
+            {onSaveRoute && (
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={saveName}
+                  onChange={(e) => setSaveName(e.target.value)}
+                  placeholder="Optional name (e.g. “Austin → Dallas”)"
+                  className="flex-1 rounded-md bg-slate-900 border border-slate-700 px-2 py-1 text-[11px] outline-none focus:ring-2 focus:ring-sky-500"
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving || !start.trim() || !end.trim()}
+                  className="rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-400 px-3 py-1 text-[11px] font-semibold"
+                >
+                  {saving ? 'Saving…' : saveSuccess ? 'Saved' : 'Save'}
+                </button>
+              </div>
+            )}
+
+            {saveError && (
+              <div className="mt-2 text-[11px] text-red-200 bg-red-900/40 border border-red-800 rounded-md px-2 py-1">
+                {saveError}
+              </div>
+            )}
+
+            {showSavedRoutes && (
+              <div className="mt-2 border-t border-slate-700 pt-2">
+                {savedRoutesError && (
+                  <div className="text-[11px] text-red-200 bg-red-900/40 border border-red-800 rounded-md px-2 py-1">
+                    {savedRoutesError}
+                  </div>
+                )}
+                {savedRoutesLoading ? (
+                  <div className="text-[11px] text-slate-400">Loading saved routes…</div>
+                ) : (savedRoutes?.length ?? 0) === 0 ? (
+                  <div className="text-[11px] text-slate-400">No saved routes yet.</div>
+                ) : (
+                  <div className="max-h-40 overflow-auto divide-y divide-slate-700">
+                    {(savedRoutes ?? []).map((r) => (
+                      <div key={r.id} className="py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-[11px] text-slate-100 font-medium">
+                              {r.name ?? `${r.start_query} → ${r.end_query}`}
+                            </div>
+                            <div className="truncate text-[11px] text-slate-400">
+                              {r.preference === 'charger_optimized' ? 'DC optimized' : 'Fastest'} • {r.corridor_miles} mi
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleLoadSavedRoute(r.id)}
+                            className="shrink-0 rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-700"
+                          >
+                            Load
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {route && (
           <div className="text-xs text-slate-200 bg-slate-800/40 border border-slate-700 rounded-md">
             {routeStations.length === 0 ? (
@@ -246,7 +444,17 @@ export default function RoutePlanner({ route, loading, error, onPlanRoute, onCle
             ) : (
               <div className="max-h-56 overflow-auto divide-y divide-slate-700">
                 {routeStations.map((station, idx) => (
-                  <div key={`${station.id}-${idx}`} className="px-3 py-2">
+                  <button
+                    key={`${station.id}-${idx}`}
+                    type="button"
+                    onClick={onSelectStation ? () => onSelectStation(station.id) : undefined}
+                    disabled={!onSelectStation}
+                    className={[
+                      'w-full text-left px-3 py-2 transition-colors',
+                      onSelectStation ? 'hover:bg-slate-700/40' : 'cursor-default',
+                      station.id === selectedStationId ? 'bg-slate-700/50' : '',
+                    ].join(' ')}
+                  >
                     <div className="flex justify-between gap-3">
                       <div className="font-medium text-slate-100 truncate">
                         {idx + 1}. {station.station_name}
@@ -263,7 +471,7 @@ export default function RoutePlanner({ route, loading, error, onPlanRoute, onCle
                         off-route {formatMiles(station.distance_to_route_miles)}
                       </div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}

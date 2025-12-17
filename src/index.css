@@ -1,0 +1,23 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+/* Custom CSS variables for the app theme */
+@theme {
+  --color-ea-green: #00b140;
+  --color-ea-dark: #0f172a;
+  --color-ea-accent: #1e40af;
+}
+
+/* Base styles */
+html, body, #root {
+  @apply h-full w-full m-0 p-0;
+}
+
+body {
+  @apply bg-slate-900 text-slate-100 font-sans antialiased;
+}
+
+/* Leaflet map container fix */
+.leaflet-container {
+  @apply h-full w-full bg-slate-800;
+}

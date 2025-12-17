@@ -5,7 +5,7 @@ type Props = {
   route: RouteResponse | null;
   loading: boolean;
   error: string | null;
-  onPlanRoute: (params: { start: string; end: string; waypoints: string[] }) => Promise<void>;
+  onPlanRoute: (params: { start: string; end: string; waypoints: string[]; corridorMiles: number }) => Promise<void>;
   onClearRoute: () => void;
 };
 
@@ -33,6 +33,7 @@ export default function RoutePlanner({ route, loading, error, onPlanRoute, onCle
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [waypoints, setWaypoints] = useState<string[]>([]);
+  const [corridorMiles, setCorridorMiles] = useState<number>(30);
 
   const routeStations = useMemo(() => route?.stations ?? [], [route]);
 
@@ -47,6 +48,7 @@ export default function RoutePlanner({ route, loading, error, onPlanRoute, onCle
       start: start.trim(),
       end: end.trim(),
       waypoints: waypoints.map((w) => w.trim()).filter(Boolean),
+      corridorMiles,
     });
   }
 
@@ -133,6 +135,27 @@ export default function RoutePlanner({ route, loading, error, onPlanRoute, onCle
           >
             + Add waypoint
           </button>
+        </div>
+
+        <div>
+          <label className="block text-xs text-slate-300 mb-1" htmlFor="route-corridor">
+            Corridor width
+          </label>
+          <select
+            id="route-corridor"
+            value={corridorMiles}
+            onChange={(e) => setCorridorMiles(Number.parseInt(e.target.value, 10))}
+            className="w-full rounded-md bg-slate-800 border border-slate-700 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+          >
+            {[5, 10, 15, 20, 25, 30, 40, 50].map((value) => (
+              <option key={value} value={value}>
+                {value} miles
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-slate-400">
+            Includes EA stations within this distance of the route.
+          </p>
         </div>
 
         <div>

@@ -19,7 +19,6 @@ L.Icon.Default.mergeOptions({
 
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795]; // Center of US
 const DEFAULT_ZOOM = 4;
-const ROUTE_CORRIDOR_MILES = 15;
 
 function formatMiles(miles: number): string {
   if (!Number.isFinite(miles)) return '';
@@ -96,11 +95,11 @@ function App() {
     }
   }
 
-  async function handlePlanRoute(params: { start: string; end: string; waypoints: string[] }) {
+  async function handlePlanRoute(params: { start: string; end: string; waypoints: string[]; corridorMiles: number }) {
     setRouteLoading(true);
     setRouteError(null);
     try {
-      const data = await fetchRoute(params.start, params.end, params.waypoints, ROUTE_CORRIDOR_MILES);
+      const data = await fetchRoute(params.start, params.end, params.waypoints, params.corridorMiles);
       setRoute(data);
     } catch (err) {
       setRouteError(err instanceof Error ? err.message : 'Failed to plan route');

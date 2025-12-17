@@ -231,6 +231,12 @@ export default function RoutePlanner({ route, loading, error, onPlanRoute, onCle
           </div>
         )}
 
+        {route?.warning && (
+          <div className="text-xs text-amber-100 bg-amber-900/40 border border-amber-800 rounded-md px-3 py-2">
+            {route.warning}
+          </div>
+        )}
+
         {route && (
           <div className="text-xs text-slate-200 bg-slate-800/40 border border-slate-700 rounded-md">
             {routeStations.length === 0 ? (

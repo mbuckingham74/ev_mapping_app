@@ -27,8 +27,10 @@ type RouteResponse = {
   corridor_miles?: number;
   stations?: StationAlongRoute[];
   preference?: 'fastest' | 'charger_optimized';
+  requested_preference?: 'fastest' | 'charger_optimized';
   candidates_evaluated?: number;
   max_gap_miles?: number;
+  warning?: string;
 };
 
 type StationRow = {
@@ -209,7 +211,20 @@ async function directionsOrsWithAlternatives(options: {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`OpenRouteService directions error: ${response.status} ${response.statusText}\n${text}`);
+    let orsCode: number | undefined;
+    try {
+      const parsed = JSON.parse(text) as { error?: { code?: unknown } };
+      if (typeof parsed?.error?.code === 'number') {
+        orsCode = parsed.error.code;
+      }
+    } catch {
+      // ignore parse errors
+    }
+
+    const error = new Error(`OpenRouteService directions error: ${response.status} ${response.statusText}\n${text}`);
+    (error as unknown as { orsStatus?: number }).orsStatus = response.status;
+    (error as unknown as { orsCode?: number }).orsCode = orsCode;
+    throw error;
   }
 
   const data = (await response.json()) as unknown;
@@ -430,6 +445,15 @@ function computeMaxGapMiles(stations: StationAlongRoute[], totalRouteMiles: numb
   return maxGap;
 }
 
+function isOrsAlternativeRouteLimitError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const status = (error as { orsStatus?: unknown }).orsStatus;
+  const code = (error as { orsCode?: unknown }).orsCode;
+  if (status === 400 && code === 2004) return true;
+  const message = (error as { message?: unknown }).message;
+  return typeof message === 'string' && message.includes('approximated route distance') && message.includes('150000');
+}
+
 router.post('/', async (req, res) => {
   try {
     const start = ensureString((req.body as { start?: unknown } | undefined)?.start);
@@ -470,12 +494,28 @@ router.post('/', async (req, res) => {
     const coords = resolvedPoints.map((p) => [p.lng, p.lat] as [number, number]);
     const corridorMiles = Math.max(0, ensureNumber(rawCorridorMiles) ?? 15);
     const includeStations = includeStationsRaw === undefined ? true : includeStationsRaw !== false;
-    const preference = preferenceRaw === 'charger_optimized' ? 'charger_optimized' : 'fastest';
+    const requestedPreference = preferenceRaw === 'charger_optimized' ? 'charger_optimized' : 'fastest';
+    let preference: 'fastest' | 'charger_optimized' = requestedPreference;
+    let warning: string | undefined;
 
-    const candidates = await directionsOrsWithAlternatives({
-      coordinates: coords,
-      includeAlternatives: preference === 'charger_optimized',
-    });
+    let candidates: RouteResult[];
+    try {
+      candidates = await directionsOrsWithAlternatives({
+        coordinates: coords,
+        includeAlternatives: preference === 'charger_optimized',
+      });
+    } catch (error) {
+      if (preference === 'charger_optimized' && isOrsAlternativeRouteLimitError(error)) {
+        warning = 'DC optimized routing is not available for this route length; using the fastest route instead.';
+        preference = 'fastest';
+        candidates = await directionsOrsWithAlternatives({
+          coordinates: coords,
+          includeAlternatives: false,
+        });
+      } else {
+        throw error;
+      }
+    }
 
     let chosen: RouteResult = candidates[0]!;
     let chosenStations: StationAlongRoute[] | undefined;
@@ -531,8 +571,10 @@ router.post('/', async (req, res) => {
       responseBody.corridor_miles = corridorMiles;
       responseBody.stations = chosenStations ?? [];
       responseBody.preference = preference;
+      responseBody.requested_preference = requestedPreference;
       responseBody.candidates_evaluated = candidates.length;
       responseBody.max_gap_miles = maxGapMiles;
+      responseBody.warning = warning;
     }
 
     return res.json(responseBody);

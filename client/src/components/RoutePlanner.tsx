@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { RouteResponse } from '../types/route';
 import type { SavedRoute } from '../types/savedRoute';
 
@@ -7,6 +7,10 @@ type Props = {
   loading: boolean;
   error: string | null;
   selectedStationId?: number | null;
+  isAuthenticated?: boolean;
+  onOpenAuth?: () => void;
+  defaultCorridorMiles?: number;
+  defaultPreference?: 'fastest' | 'charger_optimized';
   initialParams?: {
     start: string;
     end: string;
@@ -62,6 +66,10 @@ export default function RoutePlanner({
   loading,
   error,
   selectedStationId,
+  isAuthenticated,
+  onOpenAuth,
+  defaultCorridorMiles,
+  defaultPreference,
   initialParams,
   savedRoutes,
   savedRoutesLoading,
@@ -75,8 +83,8 @@ export default function RoutePlanner({
   const [start, setStart] = useState(initialParams?.start ?? '');
   const [end, setEnd] = useState(initialParams?.end ?? '');
   const [waypoints, setWaypoints] = useState<string[]>(initialParams?.waypoints ?? []);
-  const [corridorMiles, setCorridorMiles] = useState<number>(initialParams?.corridorMiles ?? 30);
-  const [preference, setPreference] = useState<'fastest' | 'charger_optimized'>(initialParams?.preference ?? 'charger_optimized');
+  const [corridorMiles, setCorridorMiles] = useState<number>(initialParams?.corridorMiles ?? defaultCorridorMiles ?? 30);
+  const [preference, setPreference] = useState<'fastest' | 'charger_optimized'>(initialParams?.preference ?? defaultPreference ?? 'charger_optimized');
   const [saveName, setSaveName] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -85,6 +93,17 @@ export default function RoutePlanner({
   const [showSavedRoutes, setShowSavedRoutes] = useState(false);
 
   const routeStations = useMemo(() => route?.stations ?? [], [route]);
+
+  useEffect(() => {
+    if (initialParams) return;
+    if (start.trim() || end.trim()) return;
+    if (typeof defaultCorridorMiles === 'number' && Number.isFinite(defaultCorridorMiles)) {
+      setCorridorMiles(Math.max(0, defaultCorridorMiles));
+    }
+    if (defaultPreference === 'fastest' || defaultPreference === 'charger_optimized') {
+      setPreference(defaultPreference);
+    }
+  }, [defaultCorridorMiles, defaultPreference, end, initialParams, start]);
 
   const canSubmit = useMemo(() => {
     return start.trim().length > 0 && end.trim().length > 0 && !loading;
@@ -104,24 +123,19 @@ export default function RoutePlanner({
 
   async function handleCopyLink() {
     try {
-      const qs = new URLSearchParams(window.location.search);
-      const hasSavedLink = qs.has('saved');
-
       let url = window.location.href;
-      if (!hasSavedLink) {
-        const startTrimmed = start.trim();
-        const endTrimmed = end.trim();
-        if (startTrimmed && endTrimmed) {
-          const next = new URLSearchParams();
-          next.set('start', startTrimmed);
-          next.set('end', endTrimmed);
-          for (const wp of waypoints.map((w) => w.trim()).filter(Boolean)) {
-            next.append('wp', wp);
-          }
-          next.set('corridor', String(corridorMiles));
-          next.set('pref', preference);
-          url = `${window.location.origin}${window.location.pathname}?${next.toString()}`;
+      const startTrimmed = start.trim();
+      const endTrimmed = end.trim();
+      if (startTrimmed && endTrimmed) {
+        const next = new URLSearchParams();
+        next.set('start', startTrimmed);
+        next.set('end', endTrimmed);
+        for (const wp of waypoints.map((w) => w.trim()).filter(Boolean)) {
+          next.append('wp', wp);
         }
+        next.set('corridor', String(corridorMiles));
+        next.set('pref', preference);
+        url = `${window.location.origin}${window.location.pathname}?${next.toString()}`;
       }
 
       await navigator.clipboard.writeText(url);
@@ -360,7 +374,13 @@ export default function RoutePlanner({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowSavedRoutes((v) => !v)}
+                  onClick={() => {
+                    if (!isAuthenticated && onOpenAuth) {
+                      onOpenAuth();
+                      return;
+                    }
+                    setShowSavedRoutes((v) => !v);
+                  }}
                   className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-700"
                 >
                   Saved routes
@@ -368,7 +388,7 @@ export default function RoutePlanner({
               </div>
             </div>
 
-            {onSaveRoute && (
+            {onSaveRoute ? (
               <div className="mt-2 flex gap-2">
                 <input
                   value={saveName}
@@ -386,6 +406,19 @@ export default function RoutePlanner({
                   {saving ? 'Saving…' : saveSuccess ? 'Saved' : 'Save'}
                 </button>
               </div>
+            ) : (
+              <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                <div>Sign in to save routes.</div>
+                {onOpenAuth && (
+                  <button
+                    type="button"
+                    onClick={onOpenAuth}
+                    className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-700"
+                  >
+                    Sign in
+                  </button>
+                )}
+              </div>
             )}
 
             {saveError && (
@@ -396,6 +429,12 @@ export default function RoutePlanner({
 
             {showSavedRoutes && (
               <div className="mt-2 border-t border-slate-700 pt-2">
+                {!isAuthenticated ? (
+                  <div className="text-[11px] text-slate-400">
+                    Sign in to view your saved routes.
+                  </div>
+                ) : (
+                  <>
                 {savedRoutesError && (
                   <div className="text-[11px] text-red-200 bg-red-900/40 border border-red-800 rounded-md px-2 py-1">
                     {savedRoutesError}
@@ -429,6 +468,8 @@ export default function RoutePlanner({
                       </div>
                     ))}
                   </div>
+                )}
+                  </>
                 )}
               </div>
             )}

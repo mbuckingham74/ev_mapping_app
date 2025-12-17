@@ -1,6 +1,7 @@
 import type { Station } from '../types/station';
 import type { RouteResponse } from '../types/route';
 import type { SavedRoute } from '../types/savedRoute';
+import type { MeResponse, User, UserPreferences } from '../types/user';
 
 const API_BASE = '/api';
 
@@ -31,14 +32,25 @@ export async function fetchRoute(
   end: string,
   waypoints: string[] = [],
   corridorMiles: number = 15,
-  preference: 'fastest' | 'charger_optimized' = 'fastest'
+  preference: 'fastest' | 'charger_optimized' = 'fastest',
+  options?: { rangeMiles?: number; maxDetourFactor?: number }
 ): Promise<RouteResponse> {
   const response = await fetch(`${API_BASE}/route`, {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ start, end, waypoints, corridorMiles, includeStations: true, preference }),
+    body: JSON.stringify({
+      start,
+      end,
+      waypoints,
+      corridorMiles,
+      includeStations: true,
+      preference,
+      rangeMiles: options?.rangeMiles,
+      maxDetourFactor: options?.maxDetourFactor,
+    }),
   });
 
   if (!response.ok) {
@@ -53,7 +65,7 @@ export async function fetchStations(state?: string): Promise<Station[]> {
     ? `${API_BASE}/stations?state=${encodeURIComponent(state)}`
     : `${API_BASE}/stations`;
 
-  const response = await fetch(url);
+  const response = await fetch(url, { credentials: 'include' });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch stations: ${response.statusText}`);
@@ -63,7 +75,7 @@ export async function fetchStations(state?: string): Promise<Station[]> {
 }
 
 export async function fetchStation(id: number): Promise<Station> {
-  const response = await fetch(`${API_BASE}/stations/${id}`);
+  const response = await fetch(`${API_BASE}/stations/${id}`, { credentials: 'include' });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch station: ${response.statusText}`);
@@ -79,7 +91,8 @@ export async function fetchNearbyStations(
   limit: number = 20
 ): Promise<Station[]> {
   const response = await fetch(
-    `${API_BASE}/stations/near/${lat}/${lng}?radius=${radius}&limit=${limit}`
+    `${API_BASE}/stations/near/${lat}/${lng}?radius=${radius}&limit=${limit}`,
+    { credentials: 'include' }
   );
 
   if (!response.ok) {
@@ -90,7 +103,7 @@ export async function fetchNearbyStations(
 }
 
 export async function fetchStationCount(): Promise<{ total: number }> {
-  const response = await fetch(`${API_BASE}/stations/stats/count`);
+  const response = await fetch(`${API_BASE}/stations/stats/count`, { credentials: 'include' });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch station count: ${response.statusText}`);
@@ -100,7 +113,7 @@ export async function fetchStationCount(): Promise<{ total: number }> {
 }
 
 export async function fetchSavedRoutes(): Promise<SavedRoute[]> {
-  const response = await fetch(`${API_BASE}/saved-routes`);
+  const response = await fetch(`${API_BASE}/saved-routes`, { credentials: 'include' });
 
   if (!response.ok) {
     throw new Error(await getApiErrorMessage(response, `Failed to fetch saved routes: ${response.statusText}`));
@@ -110,7 +123,7 @@ export async function fetchSavedRoutes(): Promise<SavedRoute[]> {
 }
 
 export async function fetchSavedRoute(id: number): Promise<SavedRoute> {
-  const response = await fetch(`${API_BASE}/saved-routes/${id}`);
+  const response = await fetch(`${API_BASE}/saved-routes/${id}`, { credentials: 'include' });
 
   if (!response.ok) {
     throw new Error(await getApiErrorMessage(response, `Failed to fetch saved route: ${response.statusText}`));
@@ -129,6 +142,7 @@ export async function createSavedRoute(params: {
 }): Promise<SavedRoute> {
   const response = await fetch(`${API_BASE}/saved-routes`, {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
     },
@@ -144,6 +158,85 @@ export async function createSavedRoute(params: {
 
   if (!response.ok) {
     throw new Error(await getApiErrorMessage(response, `Failed to save route: ${response.statusText}`));
+  }
+
+  return response.json();
+}
+
+export async function fetchMe(): Promise<MeResponse> {
+  const response = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, `Failed to load session: ${response.statusText}`));
+  }
+  return response.json();
+}
+
+export async function signup(email: string, password: string): Promise<{ user: User; preferences: UserPreferences }> {
+  const response = await fetch(`${API_BASE}/auth/signup`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, `Failed to sign up: ${response.statusText}`));
+  }
+
+  return response.json();
+}
+
+export async function login(email: string, password: string): Promise<{ user: User; preferences: UserPreferences }> {
+  const response = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, `Failed to sign in: ${response.statusText}`));
+  }
+
+  return response.json();
+}
+
+export async function logout(): Promise<void> {
+  const response = await fetch(`${API_BASE}/auth/logout`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, `Failed to log out: ${response.statusText}`));
+  }
+}
+
+export async function updatePreferences(patch: Partial<{
+  vehicleName: string | null;
+  rangeMiles: number;
+  efficiencyMiPerKwh: number | null;
+  batteryKwh: number | null;
+  minArrivalPercent: number;
+  defaultCorridorMiles: number;
+  defaultPreference: 'fastest' | 'charger_optimized';
+  maxDetourFactor: number;
+}>): Promise<UserPreferences> {
+  const response = await fetch(`${API_BASE}/auth/preferences`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(patch),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, `Failed to update preferences: ${response.statusText}`));
   }
 
   return response.json();

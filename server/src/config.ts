@@ -27,6 +27,10 @@ export const config = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: readIntEnv('PORT', 3001),
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
+  auth: {
+    sessionCookieName: process.env.SESSION_COOKIE_NAME ?? 'ea_session',
+    sessionTtlDays: readIntEnv('SESSION_TTL_DAYS', 30),
+  },
   db: {
     host: process.env.DB_HOST ?? 'localhost',
     port: readIntEnv('DB_PORT', 5432),
@@ -41,4 +45,3 @@ export const config = {
     openRouteService: process.env.OPENROUTESERVICE_API_KEY,
   },
 } as const;
-

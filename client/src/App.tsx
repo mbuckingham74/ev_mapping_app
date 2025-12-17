@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, ZoomControl, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { createSavedRoute, fetchRoute, fetchSavedRoute, fetchSavedRoutes, fetchStations, fetchStationCount } from './services/api';
+import { createSavedRoute, fetchMe, fetchRoute, fetchSavedRoute, fetchSavedRoutes, fetchStations, fetchStationCount, login, logout, signup, updatePreferences } from './services/api';
 import type { Station } from './types/station';
 import type { RouteResponse, RouteStation } from './types/route';
 import type { SavedRoute } from './types/savedRoute';
 import RoutePlanner from './components/RoutePlanner';
+import AuthModal from './components/AuthModal';
+import AccountModal from './components/AccountModal';
+import type { User, UserPreferences } from './types/user';
 
 // Fix Leaflet marker icons
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -320,6 +323,11 @@ function App() {
   const [savedRoutesError, setSavedRoutesError] = useState<string | null>(null);
   const [plannerInitialParams, setPlannerInitialParams] = useState<RoutePlanParams | null>(null);
   const [plannerKey, setPlannerKey] = useState(0);
+  const [user, setUser] = useState<User | null>(null);
+  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
+  const preferencesRef = useRef<UserPreferences | null>(null);
 
   const routeStops = useMemo(() => {
     if (!route) return [];
@@ -366,10 +374,35 @@ function App() {
   }, [route, routeStations]);
 
   useEffect(() => {
-    loadData();
-    loadSavedRoutes();
-    void initializeFromUrl();
+    void bootstrap();
   }, []);
+
+  async function bootstrap() {
+    void loadData();
+    await initializeAuth();
+    await initializeFromUrl();
+  }
+
+  async function initializeAuth() {
+    try {
+      const me = await fetchMe();
+      setUser(me.user);
+      setPreferences(me.preferences);
+      preferencesRef.current = me.preferences;
+      if (me.user) {
+        await loadSavedRoutes(me.user);
+      } else {
+        setSavedRoutes([]);
+        setSavedRoutesError(null);
+      }
+    } catch (err) {
+      console.error('Failed to initialize auth:', err);
+      setUser(null);
+      setPreferences(null);
+      preferencesRef.current = null;
+      setSavedRoutes([]);
+    }
+  }
 
   useEffect(() => {
     setSelectedStationId(null);
@@ -393,7 +426,13 @@ function App() {
     }
   }
 
-  async function loadSavedRoutes() {
+  async function loadSavedRoutes(activeUser: User | null = user) {
+    if (!activeUser) {
+      setSavedRoutes([]);
+      setSavedRoutesLoading(false);
+      setSavedRoutesError(null);
+      return;
+    }
     setSavedRoutesLoading(true);
     setSavedRoutesError(null);
     try {
@@ -410,7 +449,11 @@ function App() {
     setRouteLoading(true);
     setRouteError(null);
     try {
-      const data = await fetchRoute(params.start, params.end, params.waypoints, params.corridorMiles, params.preference);
+      const prefs = preferencesRef.current;
+      const data = await fetchRoute(params.start, params.end, params.waypoints, params.corridorMiles, params.preference, {
+        rangeMiles: prefs?.range_miles,
+        maxDetourFactor: prefs?.max_detour_factor,
+      });
       setRoute(data);
     } catch (err) {
       setRouteError(err instanceof Error ? err.message : 'Failed to plan route');
@@ -484,6 +527,37 @@ function App() {
     replaceUrlSearch('');
   }
 
+  async function handleLogin(email: string, password: string) {
+    const result = await login(email, password);
+    setUser(result.user);
+    setPreferences(result.preferences);
+    preferencesRef.current = result.preferences;
+    await loadSavedRoutes(result.user);
+  }
+
+  async function handleSignup(email: string, password: string) {
+    const result = await signup(email, password);
+    setUser(result.user);
+    setPreferences(result.preferences);
+    preferencesRef.current = result.preferences;
+    await loadSavedRoutes(result.user);
+  }
+
+  async function handleLogout() {
+    await logout();
+    setUser(null);
+    setPreferences(null);
+    preferencesRef.current = null;
+    setSavedRoutes([]);
+    setSavedRoutesError(null);
+  }
+
+  async function handleSavePreferences(patch: Parameters<typeof updatePreferences>[0]) {
+    const updated = await updatePreferences(patch);
+    setPreferences(updated);
+    preferencesRef.current = updated;
+  }
+
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
@@ -493,8 +567,37 @@ function App() {
             <h1 className="text-lg font-semibold text-white">EA Route Planner</h1>
             <p className="text-sm text-slate-400">Electrify America station finder</p>
           </div>
-          <div className="text-sm text-slate-400">
-            {loading ? 'Loading...' : `${count} stations`}
+          <div className="flex items-center gap-3 text-sm text-slate-400">
+            <div>{loading ? 'Loading...' : `${count} stations`}</div>
+            {user ? (
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:block max-w-[220px] truncate text-slate-300">
+                  {user.email}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAccountModalOpen(true)}
+                  className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-700"
+                >
+                  Account
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-700"
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAuthModalOpen(true)}
+                className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-700"
+              >
+                Sign in
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -525,7 +628,11 @@ function App() {
             onClearRoute={handleClearRoute}
             onSelectStation={(stationId) => setSelectedStationId(stationId)}
             selectedStationId={selectedStationId}
-            onSaveRoute={handleSaveRoute}
+            isAuthenticated={Boolean(user)}
+            onOpenAuth={() => setAuthModalOpen(true)}
+            defaultCorridorMiles={preferences?.default_corridor_miles}
+            defaultPreference={preferences?.default_preference}
+            onSaveRoute={user ? handleSaveRoute : undefined}
             onLoadSavedRoute={handleLoadSavedRoute}
           />
         </div>
@@ -613,6 +720,24 @@ function App() {
           )}
         </MapContainer>
       </div>
+
+      <AuthModal
+        open={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onLogin={handleLogin}
+        onSignup={handleSignup}
+      />
+
+      {user && (
+        <AccountModal
+          open={accountModalOpen}
+          user={user}
+          preferences={preferences}
+          onClose={() => setAccountModalOpen(false)}
+          onLogout={handleLogout}
+          onSavePreferences={handleSavePreferences}
+        />
+      )}
     </div>
   );
 }

@@ -19,12 +19,20 @@ export type RouteStation = Station & {
   distance_to_next_miles: number;
 };
 
+export type AutoWaypoint = {
+  id: number;
+  station_name: string;
+  latitude: number;
+  longitude: number;
+};
+
 export type RouteResponse = {
   points: RoutePoint[];
   summary: RouteSummary;
   geometry: [number, number][];
   corridor_miles?: number;
   stations?: RouteStation[];
+  auto_waypoints?: AutoWaypoint[];
   preference?: 'fastest' | 'charger_optimized';
   requested_preference?: 'fastest' | 'charger_optimized';
   candidates_evaluated?: number;

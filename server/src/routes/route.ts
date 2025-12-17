@@ -26,6 +26,7 @@ type RouteResponse = {
   geometry: [number, number][];
   corridor_miles?: number;
   stations?: StationAlongRoute[];
+  auto_waypoints?: AutoWaypoint[];
   preference?: 'fastest' | 'charger_optimized';
   requested_preference?: 'fastest' | 'charger_optimized';
   candidates_evaluated?: number;
@@ -58,6 +59,13 @@ type StationAlongRoute = StationRow & {
   distance_along_route_miles: number;
   distance_from_prev_miles: number;
   distance_to_next_miles: number;
+};
+
+type AutoWaypoint = {
+  id: number;
+  station_name: string;
+  latitude: number;
+  longitude: number;
 };
 
 function toErrorMessage(error: unknown): string {
@@ -93,6 +101,18 @@ function metersToMiles(meters: number): number {
 
 function milesToMeters(miles: number): number {
   return miles * METERS_PER_MILE;
+}
+
+function haversineDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const phi1 = degreesToRadians(lat1);
+  const phi2 = degreesToRadians(lat2);
+  const dPhi = degreesToRadians(lat2 - lat1);
+  const dLambda = degreesToRadians(lng2 - lng1);
+
+  const a = Math.sin(dPhi / 2) ** 2
+    + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLambda / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return EARTH_RADIUS_METERS * c;
 }
 
 async function geocodeOrs(query: string): Promise<GeocodedPoint | null> {
@@ -334,6 +354,40 @@ function buildRouteIndex(geometry: [number, number][], summaryDistanceMeters: nu
   return { segments, scaleToSummaryDistance };
 }
 
+function pointAtDistanceAlongRouteMeters(routeIndex: RouteIndex, targetDistanceMeters: number): [number, number] | null {
+  if (!Number.isFinite(targetDistanceMeters)) return null;
+  if (routeIndex.segments.length === 0) return null;
+
+  const scale = routeIndex.scaleToSummaryDistance;
+  const targetUnscaled = scale > 0 ? targetDistanceMeters / scale : targetDistanceMeters;
+
+  if (targetUnscaled <= 0) {
+    const first = routeIndex.segments[0]!;
+    return [first.aLatRad * (180 / Math.PI), first.aLngRad * (180 / Math.PI)];
+  }
+
+  const lastSeg = routeIndex.segments[routeIndex.segments.length - 1]!;
+  const totalUnscaled = lastSeg.cumStart + lastSeg.len;
+  const clampedTarget = Math.min(targetUnscaled, totalUnscaled);
+
+  for (const seg of routeIndex.segments) {
+    const end = seg.cumStart + seg.len;
+    if (clampedTarget > end) continue;
+
+    const t = seg.len > 0 ? (clampedTarget - seg.cumStart) / seg.len : 0;
+    const tClamped = Math.min(1, Math.max(0, t));
+
+    const latRad = seg.aLatRad + (tClamped * seg.dy) / EARTH_RADIUS_METERS;
+    const lngRad = seg.cosLat0 === 0
+      ? seg.aLngRad
+      : seg.aLngRad + (tClamped * seg.dx) / (seg.cosLat0 * EARTH_RADIUS_METERS);
+
+    return [latRad * (180 / Math.PI), lngRad * (180 / Math.PI)];
+  }
+
+  return null;
+}
+
 function projectPointOntoRoute(
   pointLatDeg: number,
   pointLngDeg: number,
@@ -381,6 +435,19 @@ async function getStationsInBounds(bounds: Bounds): Promise<StationRow[]> {
     [bounds.minLat, bounds.maxLat, bounds.minLng, bounds.maxLng]
   );
   return result.rows;
+}
+
+function boundsAroundPoint(lat: number, lng: number, radiusMeters: number): Bounds {
+  const padLat = radiusMeters / METERS_PER_DEGREE_LAT;
+  const cosLat = Math.cos(degreesToRadians(lat));
+  const padLng = cosLat === 0 ? 180 : radiusMeters / (METERS_PER_DEGREE_LAT * Math.abs(cosLat));
+
+  return {
+    minLat: Math.max(-90, lat - padLat),
+    maxLat: Math.min(90, lat + padLat),
+    minLng: Math.max(-180, lng - padLng),
+    maxLng: Math.min(180, lng + padLng),
+  };
 }
 
 async function getStationsAlongRoute(options: {
@@ -445,6 +512,314 @@ function computeMaxGapMiles(stations: StationAlongRoute[], totalRouteMiles: numb
   return maxGap;
 }
 
+type RouteGap = {
+  startMiles: number;
+  endMiles: number;
+  lengthMiles: number;
+  midMiles: number;
+};
+
+function computeLargestGaps(stations: StationAlongRoute[], totalRouteMiles: number, take: number): RouteGap[] {
+  const gaps: RouteGap[] = [];
+
+  if (stations.length === 0) {
+    return [{
+      startMiles: 0,
+      endMiles: totalRouteMiles,
+      lengthMiles: totalRouteMiles,
+      midMiles: totalRouteMiles / 2,
+    }];
+  }
+
+  const firstMile = Math.max(0, stations[0]!.distance_along_route_miles);
+  gaps.push({
+    startMiles: 0,
+    endMiles: firstMile,
+    lengthMiles: firstMile,
+    midMiles: firstMile / 2,
+  });
+
+  for (let i = 0; i < stations.length - 1; i += 1) {
+    const a = stations[i]!.distance_along_route_miles;
+    const b = stations[i + 1]!.distance_along_route_miles;
+    const startMiles = Math.max(0, a);
+    const endMiles = Math.max(startMiles, b);
+    const lengthMiles = endMiles - startMiles;
+    gaps.push({
+      startMiles,
+      endMiles,
+      lengthMiles,
+      midMiles: startMiles + lengthMiles / 2,
+    });
+  }
+
+  const lastMile = Math.max(0, stations[stations.length - 1]!.distance_along_route_miles);
+  const endGap = Math.max(0, totalRouteMiles - lastMile);
+  gaps.push({
+    startMiles: lastMile,
+    endMiles: totalRouteMiles,
+    lengthMiles: endGap,
+    midMiles: lastMile + endGap / 2,
+  });
+
+  return gaps
+    .filter((g) => Number.isFinite(g.lengthMiles) && g.lengthMiles > 0)
+    .sort((a, b) => b.lengthMiles - a.lengthMiles)
+    .slice(0, Math.max(1, take));
+}
+
+async function findCandidateWaypointsNearGaps(options: {
+  routeIndex: RouteIndex;
+  routeDistanceMeters: number;
+  gaps: RouteGap[];
+  corridorMiles: number;
+  excludeStationIds: Set<number>;
+  limit: number;
+}): Promise<AutoWaypoint[]> {
+  const radiusMiles = Math.min(80, Math.max(30, options.corridorMiles * 2));
+  const radiusMeters = milesToMeters(radiusMiles);
+
+  const candidates: { waypoint: AutoWaypoint; score: number }[] = [];
+  const seen = new Set<number>();
+
+  for (const gap of options.gaps) {
+    const midMeters = milesToMeters(gap.midMiles);
+    const center = pointAtDistanceAlongRouteMeters(options.routeIndex, midMeters);
+    if (!center) continue;
+    const [centerLat, centerLng] = center;
+
+    const bounds = boundsAroundPoint(centerLat, centerLng, radiusMeters);
+    const nearby = await getStationsInBounds(bounds);
+
+    for (const station of nearby) {
+      if (options.excludeStationIds.has(station.id)) continue;
+      if (seen.has(station.id)) continue;
+      if (!Number.isFinite(station.latitude) || !Number.isFinite(station.longitude)) continue;
+      if (!Number.isFinite(station.ev_dc_fast_num) || station.ev_dc_fast_num <= 0) continue;
+
+      const distanceMeters = haversineDistanceMeters(centerLat, centerLng, station.latitude, station.longitude);
+      if (distanceMeters > radiusMeters) continue;
+
+      const distanceMiles = metersToMiles(distanceMeters);
+      const power = typeof station.max_power_kw === 'number' && Number.isFinite(station.max_power_kw) ? station.max_power_kw : 0;
+
+      // Prefer closer stations; break ties with higher power and more stalls.
+      const score = (distanceMiles * 10) - (power / 100) - Math.min(10, station.ev_dc_fast_num);
+
+      seen.add(station.id);
+      candidates.push({
+        waypoint: {
+          id: station.id,
+          station_name: station.station_name,
+          latitude: station.latitude,
+          longitude: station.longitude,
+        },
+        score,
+      });
+    }
+  }
+
+  return candidates
+    .sort((a, b) => a.score - b.score)
+    .slice(0, Math.max(1, options.limit))
+    .map((c) => c.waypoint);
+}
+
+type ScoredRoute = {
+  route: RouteResult;
+  stations: StationAlongRoute[];
+  stationCount: number;
+  maxGapMiles: number;
+  distanceMeters: number;
+  viaCoords: [number, number][];
+  autoWaypoint?: AutoWaypoint;
+};
+
+function compareScoredRoutes(a: ScoredRoute, b: ScoredRoute, targetMaxGapMiles: number): number {
+  const aOk = a.maxGapMiles <= targetMaxGapMiles;
+  const bOk = b.maxGapMiles <= targetMaxGapMiles;
+
+  if (aOk !== bOk) return aOk ? -1 : 1;
+
+  if (aOk && bOk) {
+    if (b.stationCount !== a.stationCount) return b.stationCount - a.stationCount;
+    if (a.maxGapMiles !== b.maxGapMiles) return a.maxGapMiles - b.maxGapMiles;
+    return a.distanceMeters - b.distanceMeters;
+  }
+
+  if (a.maxGapMiles !== b.maxGapMiles) return a.maxGapMiles - b.maxGapMiles;
+  if (b.stationCount !== a.stationCount) return b.stationCount - a.stationCount;
+  return a.distanceMeters - b.distanceMeters;
+}
+
+function computeInsertIndexByAlongDistance(options: {
+  routeIndex: RouteIndex;
+  existingCoords: [number, number][];
+  targetAlongMeters: number;
+}): number {
+  const projections = options.existingCoords.map(([lng, lat], index) => {
+    const projection = projectPointOntoRoute(lat, lng, options.routeIndex);
+    const along = projection ? projection.distanceAlongRouteMeters : index === 0 ? 0 : Infinity;
+    return { index, along };
+  });
+
+  for (let i = 1; i < projections.length; i += 1) {
+    if (projections[i]!.along > options.targetAlongMeters) return i;
+  }
+
+  return Math.max(1, options.existingCoords.length - 1);
+}
+
+async function optimizeRouteWithAutoWaypoints(options: {
+  baseRoute: RouteResult;
+  baseViaCoords: [number, number][];
+  corridorMiles: number;
+  rangeMiles: number;
+  maxDetourFactor: number;
+}): Promise<{
+  chosen: RouteResult;
+  chosenStations: StationAlongRoute[];
+  maxGapMiles: number;
+  autoWaypoints: AutoWaypoint[];
+  evaluatedRoutes: number;
+  warning?: string;
+}> {
+  const reserveMiles = 30;
+  const targetMaxGapMiles = Math.max(0, options.rangeMiles - reserveMiles);
+  const maxAutoWaypoints = 2;
+
+  const baseStations = await getStationsAlongRoute({
+    geometry: options.baseRoute.geometry,
+    routeDistanceMeters: options.baseRoute.summary.distance_meters,
+    corridorMiles: options.corridorMiles,
+  });
+  const baseMaxGap = computeMaxGapMiles(baseStations, metersToMiles(options.baseRoute.summary.distance_meters));
+
+  const baseScore: ScoredRoute = {
+    route: options.baseRoute,
+    stations: baseStations,
+    stationCount: baseStations.length,
+    maxGapMiles: baseMaxGap,
+    distanceMeters: options.baseRoute.summary.distance_meters,
+    viaCoords: options.baseViaCoords,
+  };
+
+  const baseDistanceMeters = options.baseRoute.summary.distance_meters;
+  const distanceLimitMeters = baseDistanceMeters * Math.max(1, options.maxDetourFactor);
+
+  let current = baseScore;
+  let currentViaCoords = options.baseViaCoords;
+  let currentRouteIndex = buildRouteIndex(options.baseRoute.geometry, options.baseRoute.summary.distance_meters);
+  const autoWaypoints: AutoWaypoint[] = [];
+  let evaluatedRoutes = 1;
+
+  for (let iteration = 0; iteration < maxAutoWaypoints; iteration += 1) {
+    const totalMiles = metersToMiles(current.route.summary.distance_meters);
+    const gaps = computeLargestGaps(current.stations, totalMiles, 2);
+
+    const exclude = new Set<number>(current.stations.map((s) => s.id));
+    for (const w of autoWaypoints) exclude.add(w.id);
+
+    const candidateWaypoints = await findCandidateWaypointsNearGaps({
+      routeIndex: currentRouteIndex,
+      routeDistanceMeters: current.route.summary.distance_meters,
+      gaps,
+      corridorMiles: options.corridorMiles,
+      excludeStationIds: exclude,
+      limit: 8,
+    });
+
+    if (candidateWaypoints.length === 0) break;
+
+    const candidates: ScoredRoute[] = [];
+
+    for (const candidate of candidateWaypoints) {
+      const candidateCoord: [number, number] = [candidate.longitude, candidate.latitude];
+
+      // Insert near the largest gap midpoint.
+      const targetMidMiles = gaps[0]?.midMiles ?? totalMiles / 2;
+      const targetAlongMeters = milesToMeters(targetMidMiles);
+
+      const insertIndex = computeInsertIndexByAlongDistance({
+        routeIndex: currentRouteIndex,
+        existingCoords: currentViaCoords,
+        targetAlongMeters,
+      });
+
+      const viaCoords: [number, number][] = [
+        ...currentViaCoords.slice(0, insertIndex),
+        candidateCoord,
+        ...currentViaCoords.slice(insertIndex),
+      ];
+
+      // Avoid degenerate duplicates.
+      if (viaCoords.length >= 2) {
+        const prev = viaCoords[insertIndex - 1]!;
+        if (prev[0] === candidateCoord[0] && prev[1] === candidateCoord[1]) continue;
+        const next = viaCoords[insertIndex + 1];
+        if (next && next[0] === candidateCoord[0] && next[1] === candidateCoord[1]) continue;
+      }
+
+      const routes = await directionsOrsWithAlternatives({ coordinates: viaCoords, includeAlternatives: false });
+      evaluatedRoutes += 1;
+
+      const route = routes[0]!;
+      if (route.summary.distance_meters > distanceLimitMeters) continue;
+
+      const stations = await getStationsAlongRoute({
+        geometry: route.geometry,
+        routeDistanceMeters: route.summary.distance_meters,
+        corridorMiles: options.corridorMiles,
+      });
+      const maxGapMiles = computeMaxGapMiles(stations, metersToMiles(route.summary.distance_meters));
+
+      candidates.push({
+        route,
+        stations,
+        stationCount: stations.length,
+        maxGapMiles,
+        distanceMeters: route.summary.distance_meters,
+        viaCoords,
+        autoWaypoint: candidate,
+      });
+    }
+
+    if (candidates.length === 0) break;
+
+    candidates.sort((a, b) => compareScoredRoutes(a, b, targetMaxGapMiles));
+    const best = candidates[0]!;
+
+    const improved = compareScoredRoutes(best, current, targetMaxGapMiles) < 0;
+    if (!improved) break;
+
+    current = best;
+    currentViaCoords = best.viaCoords;
+    currentRouteIndex = buildRouteIndex(best.route.geometry, best.route.summary.distance_meters);
+    if (best.autoWaypoint) autoWaypoints.push(best.autoWaypoint);
+
+    // Stop early if we're within the gap target and already have strong coverage.
+    if (current.maxGapMiles <= targetMaxGapMiles && iteration >= 0) {
+      break;
+    }
+  }
+
+  let warning: string | undefined;
+  if (autoWaypoints.length === 0) {
+    warning = 'Could not find a better charger-optimized route within the detour limits; using the fastest route instead.';
+  } else if (current.maxGapMiles > targetMaxGapMiles) {
+    warning = `Charger-optimized route found, but max gap is still ${Math.round(current.maxGapMiles)} mi (target ≤ ${Math.round(targetMaxGapMiles)} mi).`;
+  }
+
+  return {
+    chosen: current.route,
+    chosenStations: current.stations,
+    maxGapMiles: current.maxGapMiles,
+    autoWaypoints,
+    evaluatedRoutes,
+    warning,
+  };
+}
+
 function isOrsAlternativeRouteLimitError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const status = (error as { orsStatus?: unknown }).orsStatus;
@@ -463,6 +838,10 @@ router.post('/', async (req, res) => {
       ?? (req.body as { corridorMiles?: unknown; corridor_miles?: unknown } | undefined)?.corridor_miles;
     const includeStationsRaw = (req.body as { includeStations?: unknown } | undefined)?.includeStations;
     const preferenceRaw = ensureString((req.body as { preference?: unknown } | undefined)?.preference);
+    const rawRangeMiles = (req.body as { rangeMiles?: unknown; range_miles?: unknown } | undefined)?.rangeMiles
+      ?? (req.body as { rangeMiles?: unknown; range_miles?: unknown } | undefined)?.range_miles;
+    const rawMaxDetourFactor = (req.body as { maxDetourFactor?: unknown; max_detour_factor?: unknown } | undefined)?.maxDetourFactor
+      ?? (req.body as { maxDetourFactor?: unknown; max_detour_factor?: unknown } | undefined)?.max_detour_factor;
 
     if (!start || !end) {
       return res.status(400).json({ error: 'start and end are required' });
@@ -497,8 +876,11 @@ router.post('/', async (req, res) => {
     const requestedPreference = preferenceRaw === 'charger_optimized' ? 'charger_optimized' : 'fastest';
     let preference: 'fastest' | 'charger_optimized' = requestedPreference;
     let warning: string | undefined;
+    const rangeMiles = Math.max(0, ensureNumber(rawRangeMiles) ?? 210);
+    const maxDetourFactor = Math.max(1, ensureNumber(rawMaxDetourFactor) ?? 1.25);
 
     let candidates: RouteResult[];
+    let orsAlternativesUnavailable = false;
     try {
       candidates = await directionsOrsWithAlternatives({
         coordinates: coords,
@@ -506,12 +888,13 @@ router.post('/', async (req, res) => {
       });
     } catch (error) {
       if (preference === 'charger_optimized' && isOrsAlternativeRouteLimitError(error)) {
-        warning = 'DC optimized routing is not available for this route length; using the fastest route instead.';
-        preference = 'fastest';
-        candidates = await directionsOrsWithAlternatives({
+        // Workaround for long routes: run our own waypoint-based optimization.
+        orsAlternativesUnavailable = true;
+        const baseCandidates = await directionsOrsWithAlternatives({
           coordinates: coords,
           includeAlternatives: false,
         });
+        candidates = baseCandidates;
       } else {
         throw error;
       }
@@ -520,11 +903,45 @@ router.post('/', async (req, res) => {
     let chosen: RouteResult = candidates[0]!;
     let chosenStations: StationAlongRoute[] | undefined;
     let maxGapMiles: number | undefined;
+    let autoWaypoints: AutoWaypoint[] = [];
+    let evaluatedRoutes = candidates.length;
 
     if (includeStations) {
       if (preference === 'charger_optimized') {
-        const scored = await Promise.all(
-          candidates.map(async (candidate) => {
+        const canScoreAlternatives = candidates.length > 1;
+        if (!canScoreAlternatives) {
+          // If we only have a single candidate (e.g. long routes where ORS can't return alternatives),
+          // run a waypoint-based optimizer to improve charger coverage.
+          const optimized = await optimizeRouteWithAutoWaypoints({
+            baseRoute: chosen,
+            baseViaCoords: coords,
+            corridorMiles,
+            rangeMiles,
+            maxDetourFactor,
+          });
+          chosen = optimized.chosen;
+          chosenStations = optimized.chosenStations;
+          maxGapMiles = optimized.maxGapMiles;
+          autoWaypoints = optimized.autoWaypoints;
+          evaluatedRoutes = optimized.evaluatedRoutes;
+          warning = optimized.warning;
+
+          // Mark as optimized only if we actually added waypoints.
+          if (autoWaypoints.length > 0) {
+            preference = 'charger_optimized';
+          } else {
+            preference = 'fastest';
+          }
+
+          // Keep the more specific warning (if any), otherwise leave it empty.
+          if (!warning && orsAlternativesUnavailable) {
+            // No warning needed; this is expected for long routes and we still return a route.
+          }
+        } else {
+          const targetMaxGapMiles = Math.max(0, rangeMiles - 30);
+          const scored: ScoredRoute[] = [];
+
+          for (const candidate of candidates) {
             const stations = await getStationsAlongRoute({
               geometry: candidate.geometry,
               routeDistanceMeters: candidate.summary.distance_meters,
@@ -532,25 +949,23 @@ router.post('/', async (req, res) => {
             });
             const totalMiles = metersToMiles(candidate.summary.distance_meters);
             const maxGap = computeMaxGapMiles(stations, totalMiles);
-            return {
-              candidate,
+            scored.push({
+              route: candidate,
               stations,
               stationCount: stations.length,
               maxGapMiles: maxGap,
-            };
-          })
-        );
+              distanceMeters: candidate.summary.distance_meters,
+              viaCoords: coords,
+            });
+          }
 
-        scored.sort((a, b) => {
-          if (b.stationCount !== a.stationCount) return b.stationCount - a.stationCount;
-          if (a.maxGapMiles !== b.maxGapMiles) return a.maxGapMiles - b.maxGapMiles;
-          return a.candidate.summary.distance_meters - b.candidate.summary.distance_meters;
-        });
-
-        const best = scored[0]!;
-        chosen = best.candidate;
-        chosenStations = best.stations;
-        maxGapMiles = best.maxGapMiles;
+          scored.sort((a, b) => compareScoredRoutes(a, b, targetMaxGapMiles));
+          const best = scored[0]!;
+          chosen = best.route;
+          chosenStations = best.stations;
+          maxGapMiles = best.maxGapMiles;
+          evaluatedRoutes = candidates.length;
+        }
       } else {
         chosenStations = await getStationsAlongRoute({
           geometry: chosen.geometry,
@@ -572,9 +987,12 @@ router.post('/', async (req, res) => {
       responseBody.stations = chosenStations ?? [];
       responseBody.preference = preference;
       responseBody.requested_preference = requestedPreference;
-      responseBody.candidates_evaluated = candidates.length;
+      responseBody.candidates_evaluated = evaluatedRoutes;
       responseBody.max_gap_miles = maxGapMiles;
       responseBody.warning = warning;
+      if (autoWaypoints.length > 0) {
+        responseBody.auto_waypoints = autoWaypoints;
+      }
     }
 
     return res.json(responseBody);

@@ -49,7 +49,7 @@ export function makeRouteResponseCacheKey(options: {
   const detour = (Math.round(options.maxDetourFactor * 1000) / 1000).toFixed(3);
   const queries = [options.start, ...options.waypoints, options.end].map(normalizeQueryText);
   const payload = [
-    'route:v5',
+    'route:v6',
     `pref=${options.preference}`,
     `stations=${options.includeStations ? 1 : 0}`,
     `corr=${corridor}`,

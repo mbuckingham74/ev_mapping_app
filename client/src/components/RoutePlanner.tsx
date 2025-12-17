@@ -177,6 +177,15 @@ export default function RoutePlanner({
     }
   }, [defaultCorridorMiles, defaultPreference, end, initialParams, start]);
 
+  useEffect(() => {
+    const used = route?.corridor_miles;
+    if (typeof used !== 'number' || !Number.isFinite(used)) return;
+    setCorridorMiles((current) => {
+      if (!Number.isFinite(current) || current < 0) return Math.max(0, used);
+      return current === used ? current : Math.max(0, used);
+    });
+  }, [route?.corridor_miles]);
+
   const canSubmit = useMemo(() => {
     return start.trim().length > 0 && end.trim().length > 0 && !loading;
   }, [start, end, loading]);
@@ -368,7 +377,7 @@ export default function RoutePlanner({
             onChange={(e) => setCorridorMiles(Number.parseInt(e.target.value, 10))}
             className="w-full rounded-md bg-slate-800 border border-slate-700 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
           >
-            {[5, 10, 15, 20, 25, 30, 40, 50].map((value) => (
+            {[5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80].map((value) => (
               <option key={value} value={value}>
                 {value} miles
               </option>

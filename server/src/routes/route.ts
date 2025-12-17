@@ -133,6 +133,15 @@ function computeTargetMaxGapMiles(rangeMiles: number, minArrivalPercent: number)
   return Math.max(0, range * (1 - pct / 100));
 }
 
+function corridorExpansionCandidatesMiles(requestedCorridorMiles: number): number[] {
+  const base = Math.max(0, requestedCorridorMiles);
+  const candidates = [5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80]
+    .map((value) => Math.max(0, value))
+    .filter((value) => Number.isFinite(value));
+  if (candidates.includes(base)) return candidates.filter((value) => value >= base);
+  return [base, ...candidates.filter((value) => value > base)].sort((a, b) => a - b);
+}
+
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(1, value));
@@ -1352,6 +1361,7 @@ router.post('/', async (req, res) => {
     let maxGapMiles: number | undefined;
     let autoWaypoints: AutoWaypoint[] = [];
     let evaluatedRoutes = candidates.length;
+    let corridorMilesUsed = corridorMiles;
 
     if (includeStations) {
       if (preference === 'charger_optimized') {
@@ -1421,6 +1431,55 @@ router.post('/', async (req, res) => {
       }
     }
 
+    if (
+      includeStations
+      && requestedPreference === 'charger_optimized'
+      && Array.isArray(chosenStations)
+      && typeof maxGapMiles === 'number'
+      && Number.isFinite(maxGapMiles)
+      && maxGapMiles > targetMaxGapMiles
+    ) {
+      const candidateCorridors = corridorExpansionCandidatesMiles(corridorMiles);
+      type CorridorCandidate = { corridorMiles: number; stations: StationAlongRoute[]; maxGapMiles: number };
+      let bestSafe: CorridorCandidate | null = null;
+      let bestViable: CorridorCandidate | null = null;
+
+      for (const candidateCorridorMiles of candidateCorridors) {
+        if (candidateCorridorMiles <= corridorMiles) continue;
+
+        const stations = await getStationsAlongRoute({
+          geometry: chosen.geometry,
+          routeDistanceMeters: chosen.summary.distance_meters,
+          corridorMiles: candidateCorridorMiles,
+        });
+        const candidateMaxGapMiles = computeMaxGapMiles(
+          stations,
+          metersToMiles(chosen.summary.distance_meters)
+        );
+
+        if (candidateMaxGapMiles <= targetMaxGapMiles) {
+          bestSafe = { corridorMiles: candidateCorridorMiles, stations, maxGapMiles: candidateMaxGapMiles };
+          break;
+        }
+
+        if (candidateMaxGapMiles <= rangeMiles && !bestViable) {
+          bestViable = { corridorMiles: candidateCorridorMiles, stations, maxGapMiles: candidateMaxGapMiles };
+        }
+      }
+
+      const picked = bestSafe ?? bestViable;
+      if (picked) {
+        corridorMilesUsed = picked.corridorMiles;
+        chosenStations = picked.stations;
+        maxGapMiles = picked.maxGapMiles;
+        preference = 'charger_optimized';
+        warning = [
+          warning,
+          `Expanded corridor to ${Math.round(corridorMilesUsed)} mi (was ${Math.round(corridorMiles)} mi) to reduce max gap.`,
+        ].filter(Boolean).join(' ');
+      }
+    }
+
     const elevationTotals = computeRouteElevationTotalsFeet(chosen);
     const summary: RouteSummary = {
       ...chosen.summary,
@@ -1435,8 +1494,8 @@ router.post('/', async (req, res) => {
 
     if (includeStations) {
       applyStationElevationDeltas(chosenStations ?? [], chosen);
-      applyStationRanking(chosenStations ?? [], corridorMiles);
-      responseBody.corridor_miles = corridorMiles;
+      applyStationRanking(chosenStations ?? [], corridorMilesUsed);
+      responseBody.corridor_miles = corridorMilesUsed;
       responseBody.stations = chosenStations ?? [];
       responseBody.preference = preference;
       responseBody.requested_preference = requestedPreference;

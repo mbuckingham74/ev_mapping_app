@@ -464,7 +464,7 @@ function App() {
     }
   }
 
-  async function planRoute(params: RoutePlanParams) {
+  async function planRoute(params: RoutePlanParams): Promise<RouteResponse | null> {
     setRouteLoading(true);
     setRouteError(null);
     try {
@@ -475,17 +475,25 @@ function App() {
         maxDetourFactor: prefs?.max_detour_factor,
       });
       setRoute(data);
+      return data;
     } catch (err) {
       setRouteError(err instanceof Error ? err.message : 'Failed to plan route');
+      return null;
     } finally {
       setRouteLoading(false);
     }
   }
 
   async function handlePlanRoute(params: RoutePlanParams) {
-    await planRoute(params);
+    const data = await planRoute(params);
     setPlannerInitialParams(null);
-    replaceUrlSearch(buildSearchFromPlanParams(params));
+    const corridorMiles = typeof data?.corridor_miles === 'number' && Number.isFinite(data.corridor_miles)
+      ? Math.max(0, data.corridor_miles)
+      : params.corridorMiles;
+    const preference = data?.preference === 'charger_optimized' || data?.preference === 'fastest'
+      ? data.preference
+      : params.preference;
+    replaceUrlSearch(buildSearchFromPlanParams({ ...params, corridorMiles, preference }));
   }
 
   async function handleLoadSavedRoute(id: number) {

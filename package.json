@@ -12,7 +12,11 @@
     "dev:client": "npm run dev -w client",
     "dev:server": "npm run dev -w server",
     "build": "npm run build -w client && npm run build -w server",
-    "fetch:stations": "npm run fetch:stations -w server"
+    "fetch:stations": "npm run fetch:stations -w server",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

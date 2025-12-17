@@ -1,0 +1,62 @@
+services:
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: ea-planner-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - npm_network
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: ea-planner-backend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-ea_planner}
+      - DB_USER=${DB_USER:-ea_planner}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_SSL=false
+      - CORS_ORIGIN=${CORS_ORIGIN:-https://ev.tachyonfuture.com}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - npm_network
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ea-planner-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${DB_NAME:-ea_planner}
+      - POSTGRES_USER=${DB_USER:-ea_planner}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ea_planner} -d ${DB_NAME:-ea_planner}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - npm_network
+
+networks:
+  npm_network:
+    external: true
+
+volumes:
+  postgres_data:

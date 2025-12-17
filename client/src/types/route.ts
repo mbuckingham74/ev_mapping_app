@@ -10,6 +10,8 @@ export type RoutePoint = {
 export type RouteSummary = {
   distance_meters: number;
   duration_seconds: number;
+  elevation_gain_ft?: number;
+  elevation_loss_ft?: number;
 };
 
 export type RouteStation = Station & {
@@ -17,6 +19,8 @@ export type RouteStation = Station & {
   distance_along_route_miles: number;
   distance_from_prev_miles: number;
   distance_to_next_miles: number;
+  elevation_from_prev_ft?: number;
+  elevation_to_next_ft?: number;
   rank_score?: number;
   rank?: number;
   rank_tier?: 'A' | 'B' | 'C' | 'D';

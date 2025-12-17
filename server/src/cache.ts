@@ -31,7 +31,7 @@ export function makeDirectionsCacheKey(options: {
 }): string {
   const coords = serializeCoordinates(options.coordinates);
   const alt = options.includeAlternatives ? '1' : '0';
-  return sha256Hex(`ors-directions:v2:profile=driving-car:alt=${alt}:coords=${coords}`);
+  return sha256Hex(`ors-directions:v3:profile=driving-car:alt=${alt}:elev=1:coords=${coords}`);
 }
 
 export function makeRouteResponseCacheKey(options: {
@@ -49,7 +49,7 @@ export function makeRouteResponseCacheKey(options: {
   const detour = (Math.round(options.maxDetourFactor * 1000) / 1000).toFixed(3);
   const queries = [options.start, ...options.waypoints, options.end].map(normalizeQueryText);
   const payload = [
-    'route:v3',
+    'route:v5',
     `pref=${options.preference}`,
     `stations=${options.includeStations ? 1 : 0}`,
     `corr=${corridor}`,

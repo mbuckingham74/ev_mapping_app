@@ -18,6 +18,7 @@ const router = Router();
 const METERS_PER_MILE = 1609.344;
 const EARTH_RADIUS_METERS = 6_371_000;
 const METERS_PER_DEGREE_LAT = 111_320;
+const FEET_PER_METER = 3.28084;
 
 type GeocodedPoint = {
   query: string;
@@ -29,6 +30,8 @@ type GeocodedPoint = {
 type RouteSummary = {
   distance_meters: number;
   duration_seconds: number;
+  elevation_gain_ft?: number;
+  elevation_loss_ft?: number;
 };
 
 type RouteResponse = {
@@ -70,6 +73,8 @@ type StationAlongRoute = StationRow & {
   distance_along_route_miles: number;
   distance_from_prev_miles: number;
   distance_to_next_miles: number;
+  elevation_from_prev_ft?: number;
+  elevation_to_next_ft?: number;
   rank_score?: number;
   rank?: number;
   rank_tier?: 'A' | 'B' | 'C' | 'D';
@@ -199,6 +204,161 @@ function haversineDistanceMeters(lat1: number, lng1: number, lat2: number, lng2:
   return EARTH_RADIUS_METERS * c;
 }
 
+function segmentLengthMetersApprox(aLatDeg: number, aLngDeg: number, bLatDeg: number, bLngDeg: number): number {
+  const aLatRad = degreesToRadians(aLatDeg);
+  const aLngRad = degreesToRadians(aLngDeg);
+  const bLatRad = degreesToRadians(bLatDeg);
+  const bLngRad = degreesToRadians(bLngDeg);
+
+  const lat0 = (aLatRad + bLatRad) / 2;
+  const cosLat0 = Math.cos(lat0);
+
+  const dx = (bLngRad - aLngRad) * cosLat0 * EARTH_RADIUS_METERS;
+  const dy = (bLatRad - aLatRad) * EARTH_RADIUS_METERS;
+  return Math.hypot(dx, dy);
+}
+
+function computeRouteElevationTotalsFeet(route: RouteResult): { elevation_gain_ft: number; elevation_loss_ft: number } | null {
+  const elevations = route.elevations_meters;
+  if (!elevations || elevations.length < 2) return null;
+
+  let gainMeters = 0;
+  let lossMeters = 0;
+
+  for (let i = 1; i < elevations.length; i += 1) {
+    const prev = elevations[i - 1];
+    const next = elevations[i];
+    if (typeof prev !== 'number' || typeof next !== 'number') return null;
+    if (!Number.isFinite(prev) || !Number.isFinite(next)) return null;
+    const delta = next - prev;
+    if (delta > 0) gainMeters += delta;
+    else lossMeters += -delta;
+  }
+
+  return {
+    elevation_gain_ft: Math.round(gainMeters * FEET_PER_METER),
+    elevation_loss_ft: Math.round(lossMeters * FEET_PER_METER),
+  };
+}
+
+type RouteElevationProfile = {
+  distances_meters: number[];
+  elevations_meters: number[];
+};
+
+function buildRouteElevationProfile(route: RouteResult): RouteElevationProfile | null {
+  const elevations = route.elevations_meters;
+  if (!elevations || elevations.length !== route.geometry.length) return null;
+  if (route.geometry.length === 0) return null;
+  if (!Number.isFinite(route.summary.distance_meters) || route.summary.distance_meters < 0) return null;
+
+  const unscaled: number[] = new Array(route.geometry.length);
+  unscaled[0] = 0;
+  let totalUnscaled = 0;
+
+  for (let i = 0; i < route.geometry.length - 1; i += 1) {
+    const [aLat, aLng] = route.geometry[i]!;
+    const [bLat, bLng] = route.geometry[i + 1]!;
+    const len = segmentLengthMetersApprox(aLat, aLng, bLat, bLng);
+    if (Number.isFinite(len) && len > 0) totalUnscaled += len;
+    unscaled[i + 1] = totalUnscaled;
+  }
+
+  const scale = totalUnscaled > 0 ? route.summary.distance_meters / totalUnscaled : 1;
+  const distances: number[] = [];
+  const profileElevations: number[] = [];
+
+  for (let i = 0; i < unscaled.length; i += 1) {
+    const elevation = elevations[i];
+    if (typeof elevation !== 'number' || !Number.isFinite(elevation)) return null;
+
+    let distance = unscaled[i]! * scale;
+    if (i === unscaled.length - 1) distance = route.summary.distance_meters;
+
+    if (distances.length === 0) {
+      distances.push(distance);
+      profileElevations.push(elevation);
+      continue;
+    }
+
+    const lastDistance = distances[distances.length - 1]!;
+    if (distance > lastDistance) {
+      distances.push(distance);
+      profileElevations.push(elevation);
+      continue;
+    }
+
+    distances[distances.length - 1] = Math.max(lastDistance, distance);
+    profileElevations[profileElevations.length - 1] = elevation;
+  }
+
+  return distances.length > 0
+    ? { distances_meters: distances, elevations_meters: profileElevations }
+    : null;
+}
+
+function elevationAtDistanceMeters(profile: RouteElevationProfile, targetMeters: number): number | null {
+  const distances = profile.distances_meters;
+  const elevations = profile.elevations_meters;
+  if (distances.length === 0 || elevations.length !== distances.length) return null;
+
+  const lastDistance = distances[distances.length - 1]!;
+  const target = Math.max(0, Math.min(lastDistance, targetMeters));
+
+  if (target <= distances[0]!) return elevations[0]!;
+  if (target >= lastDistance) return elevations[elevations.length - 1]!;
+
+  let lo = 0;
+  let hi = distances.length - 1;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (distances[mid]! < target) lo = mid + 1;
+    else hi = mid;
+  }
+
+  const i1 = lo;
+  const i0 = Math.max(0, i1 - 1);
+  const d0 = distances[i0]!;
+  const d1 = distances[i1]!;
+  const e0 = elevations[i0]!;
+  const e1 = elevations[i1]!;
+
+  if (d1 <= d0) return e1;
+  const t = (target - d0) / (d1 - d0);
+  return e0 + (e1 - e0) * t;
+}
+
+function applyStationElevationDeltas(stations: StationAlongRoute[], route: RouteResult): void {
+  if (stations.length === 0) return;
+  const profile = buildRouteElevationProfile(route);
+  if (!profile) return;
+
+  const totalDistanceMeters = route.summary.distance_meters;
+
+  for (let i = 0; i < stations.length; i += 1) {
+    const station = stations[i]!;
+    const prevDistanceMeters = i > 0 ? milesToMeters(stations[i - 1]!.distance_along_route_miles) : 0;
+    const currentDistanceMeters = milesToMeters(station.distance_along_route_miles);
+    const nextDistanceMeters = i < stations.length - 1
+      ? milesToMeters(stations[i + 1]!.distance_along_route_miles)
+      : totalDistanceMeters;
+
+    const prevElevationMeters = elevationAtDistanceMeters(profile, prevDistanceMeters);
+    const currentElevationMeters = elevationAtDistanceMeters(profile, currentDistanceMeters);
+    const nextElevationMeters = elevationAtDistanceMeters(profile, nextDistanceMeters);
+
+    if (prevElevationMeters !== null && currentElevationMeters !== null) {
+      const deltaFeet = Math.round((currentElevationMeters - prevElevationMeters) * FEET_PER_METER);
+      station.elevation_from_prev_ft = deltaFeet === 0 ? 0 : deltaFeet;
+    }
+
+    if (currentElevationMeters !== null && nextElevationMeters !== null) {
+      const deltaFeet = Math.round((nextElevationMeters - currentElevationMeters) * FEET_PER_METER);
+      station.elevation_to_next_ft = deltaFeet === 0 ? 0 : deltaFeet;
+    }
+  }
+}
+
 async function geocodeOrs(query: string): Promise<GeocodedPoint | null> {
   const apiKey = config.apiKeys.openRouteService;
   if (!apiKey) {
@@ -274,7 +434,7 @@ async function geocodeOrs(query: string): Promise<GeocodedPoint | null> {
   return result;
 }
 
-type RouteResult = { summary: RouteSummary; geometry: [number, number][] };
+type RouteResult = { summary: RouteSummary; geometry: [number, number][]; elevations_meters?: number[] };
 
 function parseOrsDirectionsFeature(feature: unknown): RouteResult | null {
   const f = feature as {
@@ -291,11 +451,18 @@ function parseOrsDirectionsFeature(feature: unknown): RouteResult | null {
   if (!Array.isArray(line) || line.length === 0) return null;
 
   const geometry: [number, number][] = [];
+  const elevations: number[] = [];
+  let hasElevation = true;
   for (const point of line) {
     if (!Array.isArray(point) || point.length < 2) continue;
-    const [lng, lat] = point;
+    const [lng, lat, elevation] = point;
     if (typeof lat !== 'number' || typeof lng !== 'number') continue;
     geometry.push([lat, lng]);
+    if (typeof elevation === 'number' && Number.isFinite(elevation)) {
+      elevations.push(elevation);
+    } else {
+      hasElevation = false;
+    }
   }
   if (geometry.length === 0) return null;
 
@@ -305,6 +472,7 @@ function parseOrsDirectionsFeature(feature: unknown): RouteResult | null {
       duration_seconds: duration,
     },
     geometry,
+    elevations_meters: hasElevation && elevations.length === geometry.length ? elevations : undefined,
   };
 }
 
@@ -343,9 +511,14 @@ async function directionsOrsWithAlternatives(options: {
       }
       if (geometry.length === 0) continue;
 
+      const elevationsRaw = (entry as { elevations_meters?: unknown }).elevations_meters;
+      const elevations = Array.isArray(elevationsRaw) ? elevationsRaw.filter((n) => typeof n === 'number' && Number.isFinite(n)) : null;
+      const elevations_meters = elevations && elevations.length === geometry.length ? elevations : undefined;
+
       parsed.push({
         summary: { distance_meters: distance, duration_seconds: duration },
         geometry,
+        elevations_meters,
       });
     }
     return parsed.length > 0 ? parsed : null;
@@ -360,6 +533,7 @@ async function directionsOrsWithAlternatives(options: {
   const body: Record<string, unknown> = {
     coordinates: options.coordinates.map(([lng, lat]) => [lng, lat]),
     instructions: false,
+    elevation: true,
   };
 
   if (options.includeAlternatives) {
@@ -1247,13 +1421,20 @@ router.post('/', async (req, res) => {
       }
     }
 
+    const elevationTotals = computeRouteElevationTotalsFeet(chosen);
+    const summary: RouteSummary = {
+      ...chosen.summary,
+      ...(elevationTotals ?? {}),
+    };
+
     const responseBody: RouteResponse = {
       points: resolvedPoints,
-      summary: chosen.summary,
+      summary,
       geometry: chosen.geometry,
     };
 
     if (includeStations) {
+      applyStationElevationDeltas(chosenStations ?? [], chosen);
       applyStationRanking(chosenStations ?? [], corridorMiles);
       responseBody.corridor_miles = corridorMiles;
       responseBody.stations = chosenStations ?? [];

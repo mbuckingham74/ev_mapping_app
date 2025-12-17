@@ -199,6 +199,13 @@ function formatMiles(miles: number): string {
   return `${Math.round(miles)}`;
 }
 
+function formatElevationFeet(deltaFeet: number | undefined): string {
+  if (typeof deltaFeet !== 'number' || !Number.isFinite(deltaFeet)) return '';
+  const rounded = Math.round(deltaFeet);
+  if (rounded === 0) return '0 ft';
+  return rounded > 0 ? `+${rounded} ft` : `${rounded} ft`;
+}
+
 function FitRouteBounds({ geometry }: { geometry: [number, number][] }) {
   const map = useMap();
 
@@ -271,16 +278,16 @@ function RouteStationMarker({
         click: () => onSelect(station.id),
       }}
       {...iconProps}
-    >
-      <Tooltip
-        permanent={mapZoom >= 9}
-        direction="top"
-        offset={[0, -10]}
-        opacity={0.9}
       >
+        <Tooltip
+          permanent={mapZoom >= 9}
+          direction="top"
+          offset={[0, -10]}
+          opacity={0.9}
+        >
         {index === 0
-          ? `+${formatMiles(station.distance_from_prev_miles)} mi from start`
-          : `+${formatMiles(station.distance_from_prev_miles)} mi`}
+          ? `+${formatMiles(station.distance_from_prev_miles)} mi${formatElevationFeet(station.elevation_from_prev_ft) ? ` • ${formatElevationFeet(station.elevation_from_prev_ft)}` : ''} from start`
+          : `+${formatMiles(station.distance_from_prev_miles)} mi${formatElevationFeet(station.elevation_from_prev_ft) ? ` • ${formatElevationFeet(station.elevation_from_prev_ft)}` : ''}`}
       </Tooltip>
       <Popup>
         <div className="min-w-[220px]">
@@ -300,8 +307,14 @@ function RouteStationMarker({
             )}
             <p><strong>Off-route:</strong> {formatMiles(station.distance_to_route_miles)} mi</p>
             <p><strong>Mile marker:</strong> {formatMiles(station.distance_along_route_miles)} mi</p>
-            <p><strong>From prev:</strong> {formatMiles(station.distance_from_prev_miles)} mi</p>
-            <p><strong>To next:</strong> {formatMiles(station.distance_to_next_miles)} mi</p>
+            <p>
+              <strong>From prev:</strong> {formatMiles(station.distance_from_prev_miles)} mi
+              {formatElevationFeet(station.elevation_from_prev_ft) ? ` (${formatElevationFeet(station.elevation_from_prev_ft)})` : ''}
+            </p>
+            <p>
+              <strong>To next:</strong> {formatMiles(station.distance_to_next_miles)} mi
+              {formatElevationFeet(station.elevation_to_next_ft) ? ` (${formatElevationFeet(station.elevation_to_next_ft)})` : ''}
+            </p>
             {isAutoWaypoint && (
               <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-800">
                 Optimizer waypoint

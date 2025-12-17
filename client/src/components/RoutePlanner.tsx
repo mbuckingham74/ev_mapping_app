@@ -57,10 +57,26 @@ function formatDuration(durationSeconds: number): string {
   return `${hours}h ${minutes}m`;
 }
 
+function formatElevationSummary(gainFeet?: number, lossFeet?: number): string {
+  const gain = typeof gainFeet === 'number' && Number.isFinite(gainFeet) ? Math.round(gainFeet) : null;
+  const loss = typeof lossFeet === 'number' && Number.isFinite(lossFeet) ? Math.round(lossFeet) : null;
+  if (gain === null && loss === null) return '—';
+  const gainText = gain === null ? '—' : `+${gain.toLocaleString()} ft`;
+  const lossText = loss === null ? '—' : `-${loss.toLocaleString()} ft`;
+  return `${gainText} / ${lossText}`;
+}
+
 function formatMiles(miles: number): string {
   if (!Number.isFinite(miles)) return '—';
   if (miles < 10) return `${miles.toFixed(1)} mi`;
   return `${Math.round(miles)} mi`;
+}
+
+function formatElevationFeet(deltaFeet: number | undefined): string {
+  if (typeof deltaFeet !== 'number' || !Number.isFinite(deltaFeet)) return '—';
+  const rounded = Math.round(deltaFeet);
+  if (rounded === 0) return '0 ft';
+  return rounded > 0 ? `+${rounded} ft` : `${rounded} ft`;
 }
 
 function rankBadgeClasses(tier: 'A' | 'B' | 'C' | 'D'): string {
@@ -391,6 +407,14 @@ export default function RoutePlanner({
               <span className="text-slate-300">Duration</span>
               <span className="font-medium">{formatDuration(route.summary.duration_seconds)}</span>
             </div>
+            {(typeof route.summary.elevation_gain_ft === 'number' || typeof route.summary.elevation_loss_ft === 'number') && (
+              <div className="flex justify-between mt-1">
+                <span className="text-slate-300">Elevation</span>
+                <span className="font-medium">
+                  {formatElevationSummary(route.summary.elevation_gain_ft, route.summary.elevation_loss_ft)}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between mt-1">
               <span className="text-slate-300">Route type</span>
               <span className="font-medium">
@@ -589,6 +613,9 @@ export default function RoutePlanner({
                         )}
                         <span className="text-slate-200">
                           +{formatMiles(station.distance_from_prev_miles)}
+                          {typeof station.elevation_from_prev_ft === 'number' && Number.isFinite(station.elevation_from_prev_ft)
+                            ? ` • ${formatElevationFeet(station.elevation_from_prev_ft)}`
+                            : ''}
                         </span>
                       </div>
                     </div>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, ZoomControl, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { createSavedRoute, fetchRoute, fetchSavedRoute, fetchSavedRoutes, fetchStations, fetchStationCount } from './services/api';
 import type { Station } from './types/station';
@@ -534,8 +534,10 @@ function App() {
           zoom={DEFAULT_ZOOM}
           className="h-full w-full"
           scrollWheelZoom={true}
+          zoomControl={false}
         >
           <MapZoomTracker onZoomChange={setMapZoom} />
+          <ZoomControl position="bottomleft" />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

@@ -76,7 +76,7 @@ export default function RoutePlanner({
   const [end, setEnd] = useState(initialParams?.end ?? '');
   const [waypoints, setWaypoints] = useState<string[]>(initialParams?.waypoints ?? []);
   const [corridorMiles, setCorridorMiles] = useState<number>(initialParams?.corridorMiles ?? 30);
-  const [preference, setPreference] = useState<'fastest' | 'charger_optimized'>(initialParams?.preference ?? 'fastest');
+  const [preference, setPreference] = useState<'fastest' | 'charger_optimized'>(initialParams?.preference ?? 'charger_optimized');
   const [saveName, setSaveName] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);

@@ -17,8 +17,25 @@ export async function fetchRoute(
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `Failed to plan route: ${response.statusText}`);
+    let message = `Failed to plan route: ${response.statusText}`;
+    try {
+      const data = (await response.json()) as unknown;
+      if (data && typeof data === 'object' && 'error' in data && typeof (data as { error?: unknown }).error === 'string') {
+        message = (data as { error: string }).error;
+      } else if (typeof data === 'string') {
+        message = data;
+      } else {
+        message = JSON.stringify(data);
+      }
+    } catch {
+      try {
+        const text = await response.text();
+        if (text) message = text;
+      } catch {
+        // ignore
+      }
+    }
+    throw new Error(message);
   }
 
   return response.json();

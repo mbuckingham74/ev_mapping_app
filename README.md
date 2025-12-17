@@ -1,6 +1,15 @@
 # EA Route Planner
 
-Web app for viewing Electrify America DC fast-charging stations on a map, backed by a Postgres database.
+Web app for planning routes and viewing Electrify America DC fast-charging stations on a map, backed by a Postgres database.
+
+**Live:** https://ev.tachyonfuture.com
+
+## Features
+
+- Route planning (start/end + optional waypoints)
+- “DC charger optimized” mode (may choose a longer route to include more stations)
+- Stations-along-route corridor filtering + max-gap calculation
+- Share links via URL query params and server-side saved routes
 
 ## Repo Layout
 
@@ -27,6 +36,7 @@ Update `.env` with at least:
 
 - `DB_PASSWORD`
 - `OPENCHARMAP_API_KEY` (required to fetch stations)
+- `OPENROUTESERVICE_API_KEY` (required for route planning)
 
 Start Postgres:
 
@@ -52,4 +62,3 @@ npm run fetch:stations
 ## Migrations
 
 The backend runs SQL migrations on startup. Migrations live in `server/migrations/`.
-

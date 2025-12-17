@@ -28,6 +28,8 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_SSL=false
       - CORS_ORIGIN=${CORS_ORIGIN:-https://ev.tachyonfuture.com}
+      - OPENROUTESERVICE_API_KEY=${OPENROUTESERVICE_API_KEY}
+      - OPENCHARMAP_API_KEY=${OPENCHARMAP_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy

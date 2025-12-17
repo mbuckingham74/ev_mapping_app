@@ -252,6 +252,7 @@ function RouteStationMarker({
   onSelect: (stationId: number) => void;
 }) {
   const markerRef = useRef<L.Marker>(null);
+  const iconProps = useMemo(() => (isAutoWaypoint ? { icon: AUTO_WAYPOINT_ICON } : {}), [isAutoWaypoint]);
 
   useEffect(() => {
     if (!selected) return;
@@ -262,11 +263,11 @@ function RouteStationMarker({
     <Marker
       ref={markerRef}
       position={[station.latitude, station.longitude]}
-      icon={isAutoWaypoint ? AUTO_WAYPOINT_ICON : undefined}
       zIndexOffset={selected ? 1_000 : 0}
       eventHandlers={{
         click: () => onSelect(station.id),
       }}
+      {...iconProps}
     >
       <Tooltip
         permanent={mapZoom >= 9}

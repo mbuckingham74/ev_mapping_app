@@ -5,7 +5,13 @@ type Props = {
   route: RouteResponse | null;
   loading: boolean;
   error: string | null;
-  onPlanRoute: (params: { start: string; end: string; waypoints: string[]; corridorMiles: number }) => Promise<void>;
+  onPlanRoute: (params: {
+    start: string;
+    end: string;
+    waypoints: string[];
+    corridorMiles: number;
+    preference: 'fastest' | 'charger_optimized';
+  }) => Promise<void>;
   onClearRoute: () => void;
 };
 
@@ -34,6 +40,7 @@ export default function RoutePlanner({ route, loading, error, onPlanRoute, onCle
   const [end, setEnd] = useState('');
   const [waypoints, setWaypoints] = useState<string[]>([]);
   const [corridorMiles, setCorridorMiles] = useState<number>(30);
+  const [preference, setPreference] = useState<'fastest' | 'charger_optimized'>('fastest');
 
   const routeStations = useMemo(() => route?.stations ?? [], [route]);
 
@@ -49,6 +56,7 @@ export default function RoutePlanner({ route, loading, error, onPlanRoute, onCle
       end: end.trim(),
       waypoints: waypoints.map((w) => w.trim()).filter(Boolean),
       corridorMiles,
+      preference,
     });
   }
 
@@ -138,6 +146,24 @@ export default function RoutePlanner({ route, loading, error, onPlanRoute, onCle
         </div>
 
         <div>
+          <label className="block text-xs text-slate-300 mb-1" htmlFor="route-preference">
+            Route type
+          </label>
+          <select
+            id="route-preference"
+            value={preference}
+            onChange={(e) => setPreference(e.target.value === 'charger_optimized' ? 'charger_optimized' : 'fastest')}
+            className="w-full rounded-md bg-slate-800 border border-slate-700 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+          >
+            <option value="fastest">Fastest / default</option>
+            <option value="charger_optimized">DC charger optimized</option>
+          </select>
+          <p className="mt-1 text-[11px] text-slate-400">
+            Optimized mode may take a longer route to include more stations.
+          </p>
+        </div>
+
+        <div>
           <label className="block text-xs text-slate-300 mb-1" htmlFor="route-corridor">
             Corridor width
           </label>
@@ -187,9 +213,21 @@ export default function RoutePlanner({ route, loading, error, onPlanRoute, onCle
               <span className="font-medium">{formatDuration(route.summary.duration_seconds)}</span>
             </div>
             <div className="flex justify-between mt-1">
+              <span className="text-slate-300">Route type</span>
+              <span className="font-medium">
+                {route.preference === 'charger_optimized' ? 'DC optimized' : 'Fastest'}
+              </span>
+            </div>
+            <div className="flex justify-between mt-1">
               <span className="text-slate-300">Stations (≤ {route.corridor_miles ?? 15} mi)</span>
               <span className="font-medium">{routeStations.length}</span>
             </div>
+            {typeof route.max_gap_miles === 'number' && (
+              <div className="flex justify-between mt-1">
+                <span className="text-slate-300">Max gap</span>
+                <span className="font-medium">{formatMiles(route.max_gap_miles)}</span>
+              </div>
+            )}
           </div>
         )}
 

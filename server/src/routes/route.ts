@@ -26,6 +26,9 @@ type RouteResponse = {
   geometry: [number, number][];
   corridor_miles?: number;
   stations?: StationAlongRoute[];
+  preference?: 'fastest' | 'charger_optimized';
+  candidates_evaluated?: number;
+  max_gap_miles?: number;
 };
 
 type StationRow = {
@@ -138,10 +141,60 @@ async function geocodeOrs(query: string): Promise<GeocodedPoint | null> {
   };
 }
 
-async function directionsOrs(coordinates: [number, number][]): Promise<{ summary: RouteSummary; geometry: [number, number][] }> {
+type RouteResult = { summary: RouteSummary; geometry: [number, number][] };
+
+function parseOrsDirectionsFeature(feature: unknown): RouteResult | null {
+  const f = feature as {
+    geometry?: { coordinates?: unknown };
+    properties?: { summary?: { distance?: unknown; duration?: unknown } };
+  };
+
+  const summary = f.properties?.summary;
+  const distance = summary?.distance;
+  const duration = summary?.duration;
+  if (typeof distance !== 'number' || typeof duration !== 'number') return null;
+
+  const line = f.geometry?.coordinates;
+  if (!Array.isArray(line) || line.length === 0) return null;
+
+  const geometry: [number, number][] = [];
+  for (const point of line) {
+    if (!Array.isArray(point) || point.length < 2) continue;
+    const [lng, lat] = point;
+    if (typeof lat !== 'number' || typeof lng !== 'number') continue;
+    geometry.push([lat, lng]);
+  }
+  if (geometry.length === 0) return null;
+
+  return {
+    summary: {
+      distance_meters: distance,
+      duration_seconds: duration,
+    },
+    geometry,
+  };
+}
+
+async function directionsOrsWithAlternatives(options: {
+  coordinates: [number, number][];
+  includeAlternatives: boolean;
+}): Promise<RouteResult[]> {
   const apiKey = config.apiKeys.openRouteService;
   if (!apiKey) {
     throw new Error('OPENROUTESERVICE_API_KEY not set in environment');
+  }
+
+  const body: Record<string, unknown> = {
+    coordinates: options.coordinates.map(([lng, lat]) => [lng, lat]),
+    instructions: false,
+  };
+
+  if (options.includeAlternatives) {
+    body.alternative_routes = {
+      target_count: 3,
+      weight_factor: 1.8,
+      share_factor: 0.6,
+    };
   }
 
   const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car/geojson', {
@@ -151,10 +204,7 @@ async function directionsOrs(coordinates: [number, number][]): Promise<{ summary
       Authorization: apiKey,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      coordinates: coordinates.map(([lng, lat]) => [lng, lat]),
-      instructions: false,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -172,42 +222,15 @@ async function directionsOrs(coordinates: [number, number][]): Promise<{ summary
     throw new Error('Unexpected directions response: missing features');
   }
 
-  const feature = features[0] as {
-    geometry?: { coordinates?: unknown };
-    properties?: { summary?: { distance?: unknown; duration?: unknown } };
-  };
+  const routes = features
+    .map(parseOrsDirectionsFeature)
+    .filter((r): r is RouteResult => r !== null);
 
-  const summary = feature.properties?.summary;
-  const distance = summary?.distance;
-  const duration = summary?.duration;
-  if (typeof distance !== 'number' || typeof duration !== 'number') {
-    throw new Error('Unexpected directions response: missing summary distance/duration');
+  if (routes.length === 0) {
+    throw new Error('Unexpected directions response: no valid routes');
   }
 
-  const line = feature.geometry?.coordinates;
-  if (!Array.isArray(line) || line.length === 0) {
-    throw new Error('Unexpected directions response: missing geometry coordinates');
-  }
-
-  const geometry: [number, number][] = [];
-  for (const point of line) {
-    if (!Array.isArray(point) || point.length < 2) continue;
-    const [lng, lat] = point;
-    if (typeof lat !== 'number' || typeof lng !== 'number') continue;
-    geometry.push([lat, lng]);
-  }
-
-  if (geometry.length === 0) {
-    throw new Error('Unexpected directions response: empty geometry');
-  }
-
-  return {
-    summary: {
-      distance_meters: distance,
-      duration_seconds: duration,
-    },
-    geometry,
-  };
+  return routes;
 }
 
 type Bounds = { minLat: number; maxLat: number; minLng: number; maxLng: number };
@@ -393,6 +416,20 @@ async function getStationsAlongRoute(options: {
   return stations;
 }
 
+function computeMaxGapMiles(stations: StationAlongRoute[], totalRouteMiles: number): number {
+  if (stations.length === 0) return totalRouteMiles;
+
+  let maxGap = Math.max(0, stations[0]!.distance_along_route_miles);
+  for (let i = 1; i < stations.length; i += 1) {
+    const gap = stations[i]!.distance_along_route_miles - stations[i - 1]!.distance_along_route_miles;
+    if (gap > maxGap) maxGap = gap;
+  }
+  const endGap = Math.max(0, totalRouteMiles - stations[stations.length - 1]!.distance_along_route_miles);
+  if (endGap > maxGap) maxGap = endGap;
+
+  return maxGap;
+}
+
 router.post('/', async (req, res) => {
   try {
     const start = ensureString((req.body as { start?: unknown } | undefined)?.start);
@@ -401,6 +438,7 @@ router.post('/', async (req, res) => {
     const rawCorridorMiles = (req.body as { corridorMiles?: unknown; corridor_miles?: unknown } | undefined)?.corridorMiles
       ?? (req.body as { corridorMiles?: unknown; corridor_miles?: unknown } | undefined)?.corridor_miles;
     const includeStationsRaw = (req.body as { includeStations?: unknown } | undefined)?.includeStations;
+    const preferenceRaw = ensureString((req.body as { preference?: unknown } | undefined)?.preference);
 
     if (!start || !end) {
       return res.status(400).json({ error: 'start and end are required' });
@@ -430,24 +468,71 @@ router.post('/', async (req, res) => {
 
     const resolvedPoints = points as GeocodedPoint[];
     const coords = resolvedPoints.map((p) => [p.lng, p.lat] as [number, number]);
-    const route = await directionsOrs(coords);
-
     const corridorMiles = Math.max(0, ensureNumber(rawCorridorMiles) ?? 15);
     const includeStations = includeStationsRaw === undefined ? true : includeStationsRaw !== false;
+    const preference = preferenceRaw === 'charger_optimized' ? 'charger_optimized' : 'fastest';
+
+    const candidates = await directionsOrsWithAlternatives({
+      coordinates: coords,
+      includeAlternatives: preference === 'charger_optimized',
+    });
+
+    let chosen: RouteResult = candidates[0]!;
+    let chosenStations: StationAlongRoute[] | undefined;
+    let maxGapMiles: number | undefined;
+
+    if (includeStations) {
+      if (preference === 'charger_optimized') {
+        const scored = await Promise.all(
+          candidates.map(async (candidate) => {
+            const stations = await getStationsAlongRoute({
+              geometry: candidate.geometry,
+              routeDistanceMeters: candidate.summary.distance_meters,
+              corridorMiles,
+            });
+            const totalMiles = metersToMiles(candidate.summary.distance_meters);
+            const maxGap = computeMaxGapMiles(stations, totalMiles);
+            return {
+              candidate,
+              stations,
+              stationCount: stations.length,
+              maxGapMiles: maxGap,
+            };
+          })
+        );
+
+        scored.sort((a, b) => {
+          if (b.stationCount !== a.stationCount) return b.stationCount - a.stationCount;
+          if (a.maxGapMiles !== b.maxGapMiles) return a.maxGapMiles - b.maxGapMiles;
+          return a.candidate.summary.distance_meters - b.candidate.summary.distance_meters;
+        });
+
+        const best = scored[0]!;
+        chosen = best.candidate;
+        chosenStations = best.stations;
+        maxGapMiles = best.maxGapMiles;
+      } else {
+        chosenStations = await getStationsAlongRoute({
+          geometry: chosen.geometry,
+          routeDistanceMeters: chosen.summary.distance_meters,
+          corridorMiles,
+        });
+        maxGapMiles = computeMaxGapMiles(chosenStations, metersToMiles(chosen.summary.distance_meters));
+      }
+    }
 
     const responseBody: RouteResponse = {
       points: resolvedPoints,
-      summary: route.summary,
-      geometry: route.geometry,
+      summary: chosen.summary,
+      geometry: chosen.geometry,
     };
 
     if (includeStations) {
       responseBody.corridor_miles = corridorMiles;
-      responseBody.stations = await getStationsAlongRoute({
-        geometry: route.geometry,
-        routeDistanceMeters: route.summary.distance_meters,
-        corridorMiles,
-      });
+      responseBody.stations = chosenStations ?? [];
+      responseBody.preference = preference;
+      responseBody.candidates_evaluated = candidates.length;
+      responseBody.max_gap_miles = maxGapMiles;
     }
 
     return res.json(responseBody);

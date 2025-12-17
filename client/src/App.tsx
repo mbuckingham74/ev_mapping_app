@@ -95,11 +95,11 @@ function App() {
     }
   }
 
-  async function handlePlanRoute(params: { start: string; end: string; waypoints: string[]; corridorMiles: number }) {
+  async function handlePlanRoute(params: { start: string; end: string; waypoints: string[]; corridorMiles: number; preference: 'fastest' | 'charger_optimized' }) {
     setRouteLoading(true);
     setRouteError(null);
     try {
-      const data = await fetchRoute(params.start, params.end, params.waypoints, params.corridorMiles);
+      const data = await fetchRoute(params.start, params.end, params.waypoints, params.corridorMiles, params.preference);
       setRoute(data);
     } catch (err) {
       setRouteError(err instanceof Error ? err.message : 'Failed to plan route');

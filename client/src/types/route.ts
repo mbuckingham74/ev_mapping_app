@@ -25,4 +25,7 @@ export type RouteResponse = {
   geometry: [number, number][];
   corridor_miles?: number;
   stations?: RouteStation[];
+  preference?: 'fastest' | 'charger_optimized';
+  candidates_evaluated?: number;
+  max_gap_miles?: number;
 };

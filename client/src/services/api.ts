@@ -7,14 +7,15 @@ export async function fetchRoute(
   start: string,
   end: string,
   waypoints: string[] = [],
-  corridorMiles: number = 15
+  corridorMiles: number = 15,
+  preference: 'fastest' | 'charger_optimized' = 'fastest'
 ): Promise<RouteResponse> {
   const response = await fetch(`${API_BASE}/route`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ start, end, waypoints, corridorMiles, includeStations: true }),
+    body: JSON.stringify({ start, end, waypoints, corridorMiles, includeStations: true, preference }),
   });
 
   if (!response.ok) {

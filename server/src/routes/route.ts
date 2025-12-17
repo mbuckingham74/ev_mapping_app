@@ -90,7 +90,7 @@ async function directionsOrs(coordinates: [number, number][]): Promise<{ summary
   const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car/geojson', {
     method: 'POST',
     headers: {
-      Accept: 'application/json',
+      Accept: 'application/geo+json',
       Authorization: apiKey,
       'Content-Type': 'application/json',
     },
@@ -203,4 +203,3 @@ router.post('/', async (req, res) => {
 });
 
 export default router;
-

@@ -200,7 +200,12 @@ export async function setCachedDirections(options: {
           updated_at = NOW(),
           expires_at = EXCLUDED.expires_at
       `,
-      [options.cacheKey, options.requestJson, options.routesJson, Math.floor(options.ttlDays)]
+      [
+        options.cacheKey,
+        JSON.stringify(options.requestJson),
+        JSON.stringify(options.routesJson),
+        Math.floor(options.ttlDays),
+      ]
     );
   } catch (error) {
     warnOnce('ors_directions_cache', error);
@@ -245,7 +250,12 @@ export async function setCachedRouteResponse(options: {
           updated_at = NOW(),
           expires_at = EXCLUDED.expires_at
       `,
-      [options.cacheKey, options.requestJson, options.responseJson, Math.floor(options.ttlSeconds)]
+      [
+        options.cacheKey,
+        JSON.stringify(options.requestJson),
+        JSON.stringify(options.responseJson),
+        Math.floor(options.ttlSeconds),
+      ]
     );
   } catch (error) {
     warnOnce('route_response_cache', error);

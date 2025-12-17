@@ -874,10 +874,12 @@ async function optimizeRouteWithAutoWaypoints(options: {
   }
 
   let warning: string | undefined;
-  if (autoWaypoints.length === 0) {
-    warning = 'Could not find a better charger-optimized route within the detour limits; using the fastest route instead.';
-  } else if (current.maxGapMiles > targetMaxGapMiles) {
-    warning = `Charger-optimized route found, but max gap is still ${Math.round(current.maxGapMiles)} mi (target ≤ ${Math.round(targetMaxGapMiles)} mi).`;
+  if (current.maxGapMiles > targetMaxGapMiles) {
+    if (autoWaypoints.length === 0) {
+      warning = 'Could not find a better charger-optimized route within the detour limits; using the fastest route instead.';
+    } else {
+      warning = `Charger-optimized route found, but max gap is still ${Math.round(current.maxGapMiles)} mi (target ≤ ${Math.round(targetMaxGapMiles)} mi).`;
+    }
   }
 
   return {
@@ -996,12 +998,11 @@ router.post('/', async (req, res) => {
           evaluatedRoutes = optimized.evaluatedRoutes;
           warning = optimized.warning;
 
-          // Mark as optimized only if we actually added waypoints.
-          if (autoWaypoints.length > 0) {
-            preference = 'charger_optimized';
-          } else {
-            preference = 'fastest';
-          }
+          const targetMaxGapMiles = Math.max(0, rangeMiles - 30);
+          // Treat as charger-optimized if we either added waypoints OR the fastest route already satisfies the gap target.
+          preference = (autoWaypoints.length > 0 || optimized.maxGapMiles <= targetMaxGapMiles)
+            ? 'charger_optimized'
+            : 'fastest';
 
           // Keep the more specific warning (if any), otherwise leave it empty.
           if (!warning && orsAlternativesUnavailable) {

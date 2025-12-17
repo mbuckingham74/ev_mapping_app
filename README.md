@@ -1,6 +1,6 @@
 # EA Route Planner
 
-Web app for planning routes and viewing Electrify America DC fast-charging stations on a map, backed by a Postgres database.
+Web app for planning routes and viewing Electrify America DC fast-charging stations on a map, backed by Postgres + PostGIS.
 
 **Live:** https://ev.tachyonfuture.com
 
@@ -8,22 +8,24 @@ Web app for planning routes and viewing Electrify America DC fast-charging stati
 
 - Route planning (start/end + optional waypoints)
 - “DC charger optimized” mode (may choose a longer route to include more stations)
-- Stations-along-route corridor filtering + max-gap calculation
-- Share links via URL query params and server-side saved routes
+- Accurate stations-along-route corridor filtering via PostGIS (plus max-gap calculation)
+- Accounts: save routes + store vehicle preferences (range, corridor, detour factor, etc.)
+- Risk alerts when max-gap is near/exceeds your configured range
+- Share links via URL query params (start/end/wp/corridor/pref)
 
 ## Repo Layout
 
 - `client/` — React + TypeScript + Vite frontend (Leaflet map)
 - `server/` — Node.js + Express + TypeScript backend API
 - `docker-compose.yml` — Production compose (expects external `npm_network`)
-- `docker-compose.dev.yml` — Local dev Postgres
+- `docker-compose.dev.yml` — Local dev Postgres/PostGIS
 
 ## Local Development
 
 ### Prerequisites
 
 - Node.js 22+
-- Docker (for local Postgres)
+- Docker (for local Postgres/PostGIS)
 
 ### Setup
 
@@ -58,6 +60,12 @@ npm run dev
 ```bash
 npm run fetch:stations
 ```
+
+### Auth (optional)
+
+Accounts use a secure, httpOnly session cookie stored by the backend.
+
+- Optional config in `.env`: `SESSION_COOKIE_NAME`, `SESSION_TTL_DAYS`
 
 ## Migrations
 

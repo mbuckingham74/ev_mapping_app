@@ -1,0 +1,26 @@
+{
+  "name": "ea-route-planner-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "fetch:stations": "tsx scripts/fetch-stations.ts"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "pg": "^8.14.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.4",
+    "@types/node": "^24.10.1",
+    "@types/pg": "^8.15.4",
+    "tsx": "^4.21.0",
+    "typescript": "~5.9.3"
+  }
+}

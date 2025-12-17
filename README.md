@@ -10,6 +10,7 @@ Web app for planning routes and viewing Electrify America DC fast-charging stati
 - “DC charger optimized” mode (may choose a longer route to include more stations)
 - Accurate stations-along-route corridor filtering via PostGIS (plus max-gap calculation)
 - DB-backed caching for ORS geocoding/directions and full route responses
+- Station ranking (A–D tiers) for stations along your route
 - Accounts: save routes + store vehicle preferences (range, corridor, detour factor, etc.)
 - Risk alerts when max-gap exceeds your range or would arrive below your min arrival %
 - Share links via URL query params (start/end/wp/corridor/pref)
@@ -68,6 +69,13 @@ Accounts use a secure, httpOnly session cookie stored by the backend.
 
 - Optional config in `.env`: `SESSION_COOKIE_NAME`, `SESSION_TTL_DAYS`
 
+### Min Arrival %
+
+Vehicle preference `min_arrival_percent` is used by the charger-optimizer and risk alerts.
+
+- Safe max-gap target: `range_miles * (1 - min_arrival_percent/100)`
+- The client sends `minArrivalPercent` to `POST /api/route` (and if omitted, the backend will use the signed-in user’s saved preference when available).
+
 ### Caching (optional)
 
 All cache entries are stored in Postgres with TTLs.
@@ -75,6 +83,14 @@ All cache entries are stored in Postgres with TTLs.
 - `GEOCODE_CACHE_TTL_DAYS` (default `30`)
 - `DIRECTIONS_CACHE_TTL_DAYS` (default `7`)
 - `ROUTE_CACHE_TTL_SECONDS` (default `600`)
+
+### Station Ranking
+
+When route planning returns `stations`, each station includes:
+
+- `rank_score` (0–100), `rank_tier` (`A`–`D`), and `rank` (1 = best).
+
+Ranking favors higher max kW, more DC stalls, and closer-to-route stations (and penalizes non-operational stations).
 
 ## Migrations
 

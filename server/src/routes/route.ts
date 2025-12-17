@@ -1,6 +1,17 @@
 import { Router } from 'express';
 import { config } from '../config.js';
 import { pool } from '../db.js';
+import {
+  getCachedDirections,
+  getCachedGeocode,
+  getCachedRouteResponse,
+  makeDirectionsCacheKey,
+  makeGeocodeCacheKey,
+  makeRouteResponseCacheKey,
+  setCachedDirections,
+  setCachedGeocode,
+  setCachedRouteResponse,
+} from '../cache.js';
 
 const router = Router();
 
@@ -103,6 +114,17 @@ function milesToMeters(miles: number): number {
   return miles * METERS_PER_MILE;
 }
 
+function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, value));
+}
+
+function computeTargetMaxGapMiles(rangeMiles: number, minArrivalPercent: number): number {
+  const range = Math.max(0, rangeMiles);
+  const pct = clampPercent(minArrivalPercent);
+  return Math.max(0, range * (1 - pct / 100));
+}
+
 function haversineDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const phi1 = degreesToRadians(lat1);
   const phi2 = degreesToRadians(lat2);
@@ -119,6 +141,20 @@ async function geocodeOrs(query: string): Promise<GeocodedPoint | null> {
   const apiKey = config.apiKeys.openRouteService;
   if (!apiKey) {
     throw new Error('OPENROUTESERVICE_API_KEY not set in environment');
+  }
+
+  const geocodeTtlDays = config.cache.geocodeTtlDays;
+  const geocodeCacheKey = geocodeTtlDays > 0 ? makeGeocodeCacheKey(query) : null;
+  if (geocodeCacheKey) {
+    const cached = await getCachedGeocode(geocodeCacheKey);
+    if (cached) {
+      return {
+        query,
+        label: cached.label,
+        lat: cached.lat,
+        lng: cached.lng,
+      };
+    }
   }
 
   const url = new URL('https://api.openrouteservice.org/geocode/search');
@@ -155,12 +191,25 @@ async function geocodeOrs(query: string): Promise<GeocodedPoint | null> {
 
   const label = typeof first.properties?.label === 'string' ? first.properties.label : query;
 
-  return {
+  const result: GeocodedPoint = {
     query,
     label,
     lat,
     lng,
   };
+
+  if (geocodeCacheKey) {
+    await setCachedGeocode({
+      cacheKey: geocodeCacheKey,
+      queryText: query,
+      label: result.label,
+      lat: result.lat,
+      lng: result.lng,
+      ttlDays: geocodeTtlDays,
+    });
+  }
+
+  return result;
 }
 
 type RouteResult = { summary: RouteSummary; geometry: [number, number][] };
@@ -204,6 +253,46 @@ async function directionsOrsWithAlternatives(options: {
   const apiKey = config.apiKeys.openRouteService;
   if (!apiKey) {
     throw new Error('OPENROUTESERVICE_API_KEY not set in environment');
+  }
+
+  const directionsTtlDays = config.cache.directionsTtlDays;
+  const directionsCacheKey = directionsTtlDays > 0 ? makeDirectionsCacheKey(options) : null;
+
+  function parseCachedRoutes(value: unknown): RouteResult[] | null {
+    if (!Array.isArray(value) || value.length === 0) return null;
+    const parsed: RouteResult[] = [];
+    for (const entry of value) {
+      if (!entry || typeof entry !== 'object') continue;
+      const summary = (entry as { summary?: unknown }).summary as { distance_meters?: unknown; duration_seconds?: unknown } | undefined;
+      const distance = summary?.distance_meters;
+      const duration = summary?.duration_seconds;
+      if (typeof distance !== 'number' || !Number.isFinite(distance)) continue;
+      if (typeof duration !== 'number' || !Number.isFinite(duration)) continue;
+
+      const geometryRaw = (entry as { geometry?: unknown }).geometry;
+      if (!Array.isArray(geometryRaw) || geometryRaw.length === 0) continue;
+      const geometry: [number, number][] = [];
+      for (const point of geometryRaw) {
+        if (!Array.isArray(point) || point.length < 2) continue;
+        const [lat, lng] = point;
+        if (typeof lat !== 'number' || typeof lng !== 'number') continue;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        geometry.push([lat, lng]);
+      }
+      if (geometry.length === 0) continue;
+
+      parsed.push({
+        summary: { distance_meters: distance, duration_seconds: duration },
+        geometry,
+      });
+    }
+    return parsed.length > 0 ? parsed : null;
+  }
+
+  if (directionsCacheKey) {
+    const cached = await getCachedDirections(directionsCacheKey);
+    const parsed = parseCachedRoutes(cached);
+    if (parsed) return parsed;
   }
 
   const body: Record<string, unknown> = {
@@ -263,6 +352,15 @@ async function directionsOrsWithAlternatives(options: {
 
   if (routes.length === 0) {
     throw new Error('Unexpected directions response: no valid routes');
+  }
+
+  if (directionsCacheKey) {
+    await setCachedDirections({
+      cacheKey: directionsCacheKey,
+      requestJson: body,
+      routesJson: routes,
+      ttlDays: directionsTtlDays,
+    });
   }
 
   return routes;
@@ -745,6 +843,7 @@ async function optimizeRouteWithAutoWaypoints(options: {
   baseViaCoords: [number, number][];
   corridorMiles: number;
   rangeMiles: number;
+  minArrivalPercent: number;
   maxDetourFactor: number;
 }): Promise<{
   chosen: RouteResult;
@@ -754,8 +853,7 @@ async function optimizeRouteWithAutoWaypoints(options: {
   evaluatedRoutes: number;
   warning?: string;
 }> {
-  const reserveMiles = 30;
-  const targetMaxGapMiles = Math.max(0, options.rangeMiles - reserveMiles);
+  const targetMaxGapMiles = computeTargetMaxGapMiles(options.rangeMiles, options.minArrivalPercent);
   const maxAutoWaypoints = 2;
 
   const baseStations = await getStationsAlongRoute({
@@ -904,6 +1002,8 @@ router.post('/', async (req, res) => {
       ?? (req.body as { rangeMiles?: unknown; range_miles?: unknown } | undefined)?.range_miles;
     const rawMaxDetourFactor = (req.body as { maxDetourFactor?: unknown; max_detour_factor?: unknown } | undefined)?.maxDetourFactor
       ?? (req.body as { maxDetourFactor?: unknown; max_detour_factor?: unknown } | undefined)?.max_detour_factor;
+    const rawMinArrivalPercent = (req.body as { minArrivalPercent?: unknown; min_arrival_percent?: unknown } | undefined)?.minArrivalPercent
+      ?? (req.body as { minArrivalPercent?: unknown; min_arrival_percent?: unknown } | undefined)?.min_arrival_percent;
 
     if (!start || !end) {
       return res.status(400).json({ error: 'start and end are required' });
@@ -938,8 +1038,57 @@ router.post('/', async (req, res) => {
     const requestedPreference = preferenceRaw === 'charger_optimized' ? 'charger_optimized' : 'fastest';
     let preference: 'fastest' | 'charger_optimized' = requestedPreference;
     let warning: string | undefined;
-    const rangeMiles = Math.max(0, ensureNumber(rawRangeMiles) ?? 210);
-    const maxDetourFactor = Math.max(1, ensureNumber(rawMaxDetourFactor) ?? 1.25);
+    const requestedRangeMiles = ensureNumber(rawRangeMiles);
+    const requestedMaxDetourFactor = ensureNumber(rawMaxDetourFactor);
+    const requestedMinArrivalPercent = ensureNumber(rawMinArrivalPercent);
+
+    let preferenceDefaults: { range_miles: number; max_detour_factor: number; min_arrival_percent: number } | null = null;
+    if (
+      req.user
+      && (requestedRangeMiles === null || requestedMaxDetourFactor === null || requestedMinArrivalPercent === null)
+    ) {
+      const prefsResult = await pool.query<{
+        range_miles: number;
+        max_detour_factor: number;
+        min_arrival_percent: number;
+      }>(
+        `
+          SELECT range_miles, max_detour_factor, min_arrival_percent
+          FROM user_preferences
+          WHERE user_id = $1
+          LIMIT 1
+        `,
+        [req.user.id]
+      );
+      preferenceDefaults = prefsResult.rows[0] ?? null;
+    }
+
+    const rangeMiles = Math.max(0, requestedRangeMiles ?? preferenceDefaults?.range_miles ?? 210);
+    const maxDetourFactor = Math.max(1, requestedMaxDetourFactor ?? preferenceDefaults?.max_detour_factor ?? 1.25);
+    const minArrivalPercent = clampPercent(
+      Math.round(requestedMinArrivalPercent ?? preferenceDefaults?.min_arrival_percent ?? 10)
+    );
+    const targetMaxGapMiles = computeTargetMaxGapMiles(rangeMiles, minArrivalPercent);
+
+    const routeCacheTtlSeconds = config.cache.routeResponseTtlSeconds;
+    const routeCacheKey = routeCacheTtlSeconds > 0
+      ? makeRouteResponseCacheKey({
+        start,
+        end,
+        waypoints,
+        corridorMiles,
+        includeStations,
+        preference: requestedPreference,
+        rangeMiles,
+        minArrivalPercent,
+        maxDetourFactor,
+      })
+      : null;
+
+    if (routeCacheKey) {
+      const cached = await getCachedRouteResponse(routeCacheKey);
+      if (cached) return res.json(cached);
+    }
 
     let candidates: RouteResult[];
     let orsAlternativesUnavailable = false;
@@ -979,6 +1128,7 @@ router.post('/', async (req, res) => {
             baseViaCoords: coords,
             corridorMiles,
             rangeMiles,
+            minArrivalPercent,
             maxDetourFactor,
           });
           chosen = optimized.chosen;
@@ -988,7 +1138,6 @@ router.post('/', async (req, res) => {
           evaluatedRoutes = optimized.evaluatedRoutes;
           warning = optimized.warning;
 
-          const targetMaxGapMiles = Math.max(0, rangeMiles - 30);
           // Treat as charger-optimized if we either added waypoints OR the fastest route already satisfies the gap target.
           preference = (autoWaypoints.length > 0 || optimized.maxGapMiles <= targetMaxGapMiles)
             ? 'charger_optimized'
@@ -999,7 +1148,6 @@ router.post('/', async (req, res) => {
             // No warning needed; this is expected for long routes and we still return a route.
           }
         } else {
-          const targetMaxGapMiles = Math.max(0, rangeMiles - 30);
           const scored: ScoredRoute[] = [];
 
           for (const candidate of candidates) {
@@ -1054,6 +1202,25 @@ router.post('/', async (req, res) => {
       if (autoWaypoints.length > 0) {
         responseBody.auto_waypoints = autoWaypoints;
       }
+    }
+
+    if (routeCacheKey) {
+      await setCachedRouteResponse({
+        cacheKey: routeCacheKey,
+        requestJson: {
+          start,
+          end,
+          waypoints,
+          corridorMiles,
+          includeStations,
+          preference: requestedPreference,
+          rangeMiles,
+          minArrivalPercent,
+          maxDetourFactor,
+        },
+        responseJson: responseBody,
+        ttlSeconds: routeCacheTtlSeconds,
+      });
     }
 
     return res.json(responseBody);

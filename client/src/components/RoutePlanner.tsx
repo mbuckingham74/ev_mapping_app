@@ -12,6 +12,7 @@ type Props = {
   defaultCorridorMiles?: number;
   defaultPreference?: 'fastest' | 'charger_optimized';
   rangeMiles?: number;
+  minArrivalPercent?: number;
   initialParams?: {
     start: string;
     end: string;
@@ -72,6 +73,7 @@ export default function RoutePlanner({
   defaultCorridorMiles,
   defaultPreference,
   rangeMiles,
+  minArrivalPercent,
   initialParams,
   savedRoutes,
   savedRoutesLoading,
@@ -103,6 +105,10 @@ export default function RoutePlanner({
 
     const maxGap = route.max_gap_miles;
     const bufferMiles = effectiveRange - maxGap;
+    const configuredMinArrivalPercent = typeof minArrivalPercent === 'number' && Number.isFinite(minArrivalPercent)
+      ? Math.max(0, Math.min(100, minArrivalPercent))
+      : 10;
+    const minBufferMiles = (effectiveRange * configuredMinArrivalPercent) / 100;
 
     if (maxGap > effectiveRange) {
       return {
@@ -111,17 +117,17 @@ export default function RoutePlanner({
       };
     }
 
-    // Warn only when we're within ~15 miles of the configured range.
-    if (bufferMiles <= 15) {
+    // Warn only when the max-gap would dip below the configured min arrival percent.
+    if (bufferMiles < minBufferMiles) {
       const arrivalPercent = Math.max(0, Math.round((bufferMiles / effectiveRange) * 100));
       return {
         level: 'warning' as const,
-        message: `Risky max gap: ${Math.round(maxGap)} mi (buffer ${Math.round(bufferMiles)} mi, ~${arrivalPercent}% of your range). You may need to slow down, draft, or reroute.`,
+        message: `Risky max gap: ${Math.round(maxGap)} mi (buffer ${Math.round(bufferMiles)} mi, ~${arrivalPercent}% arrival; below your min ${Math.round(configuredMinArrivalPercent)}%). You may need to slow down, draft, or reroute.`,
       };
     }
 
     return null;
-  }, [rangeMiles, route]);
+  }, [minArrivalPercent, rangeMiles, route]);
 
   const optimizerNote = useMemo(() => {
     if (!route) return null;

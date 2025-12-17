@@ -452,6 +452,7 @@ function App() {
       const prefs = preferencesRef.current;
       const data = await fetchRoute(params.start, params.end, params.waypoints, params.corridorMiles, params.preference, {
         rangeMiles: prefs?.range_miles,
+        minArrivalPercent: prefs?.min_arrival_percent,
         maxDetourFactor: prefs?.max_detour_factor,
       });
       setRoute(data);
@@ -633,6 +634,7 @@ function App() {
             defaultCorridorMiles={preferences?.default_corridor_miles}
             defaultPreference={preferences?.default_preference}
             rangeMiles={preferences?.range_miles}
+            minArrivalPercent={preferences?.min_arrival_percent}
             onSaveRoute={user ? handleSaveRoute : undefined}
             onLoadSavedRoute={handleLoadSavedRoute}
           />

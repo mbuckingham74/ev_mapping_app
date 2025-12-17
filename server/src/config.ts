@@ -31,6 +31,11 @@ export const config = {
     sessionCookieName: process.env.SESSION_COOKIE_NAME ?? 'ea_session',
     sessionTtlDays: readIntEnv('SESSION_TTL_DAYS', 30),
   },
+  cache: {
+    geocodeTtlDays: readIntEnv('GEOCODE_CACHE_TTL_DAYS', 30),
+    directionsTtlDays: readIntEnv('DIRECTIONS_CACHE_TTL_DAYS', 7),
+    routeResponseTtlSeconds: readIntEnv('ROUTE_CACHE_TTL_SECONDS', 10 * 60),
+  },
   db: {
     host: process.env.DB_HOST ?? 'localhost',
     port: readIntEnv('DB_PORT', 5432),

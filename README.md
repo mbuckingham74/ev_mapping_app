@@ -9,8 +9,9 @@ Web app for planning routes and viewing Electrify America DC fast-charging stati
 - Route planning (start/end + optional waypoints)
 - “DC charger optimized” mode (may choose a longer route to include more stations)
 - Accurate stations-along-route corridor filtering via PostGIS (plus max-gap calculation)
+- DB-backed caching for ORS geocoding/directions and full route responses
 - Accounts: save routes + store vehicle preferences (range, corridor, detour factor, etc.)
-- Risk alerts when max-gap is near/exceeds your configured range
+- Risk alerts when max-gap exceeds your range or would arrive below your min arrival %
 - Share links via URL query params (start/end/wp/corridor/pref)
 
 ## Repo Layout
@@ -66,6 +67,14 @@ npm run fetch:stations
 Accounts use a secure, httpOnly session cookie stored by the backend.
 
 - Optional config in `.env`: `SESSION_COOKIE_NAME`, `SESSION_TTL_DAYS`
+
+### Caching (optional)
+
+All cache entries are stored in Postgres with TTLs.
+
+- `GEOCODE_CACHE_TTL_DAYS` (default `30`)
+- `DIRECTIONS_CACHE_TTL_DAYS` (default `7`)
+- `ROUTE_CACHE_TTL_SECONDS` (default `600`)
 
 ## Migrations
 

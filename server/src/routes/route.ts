@@ -456,11 +456,63 @@ async function getStationsAlongRoute(options: {
   corridorMiles: number;
 }): Promise<StationAlongRoute[]> {
   const corridorMeters = milesToMeters(options.corridorMiles);
-  const bounds = computeBounds(options.geometry, corridorMeters);
-  const candidates = await getStationsInBounds(bounds);
   const routeIndex = buildRouteIndex(options.geometry, options.routeDistanceMeters);
 
   const stations: StationAlongRoute[] = [];
+
+  function lineStringWktFromRoute(geometry: [number, number][]): string | null {
+    const parts: string[] = [];
+    for (const [lat, lng] of geometry) {
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      parts.push(`${lng.toFixed(6)} ${lat.toFixed(6)}`);
+    }
+    if (parts.length < 2) return null;
+    return `LINESTRING(${parts.join(',')})`;
+  }
+
+  type StationDistanceRow = StationRow & { distance_to_route_meters: number };
+
+  async function getStationsNearRoutePostgis(): Promise<StationDistanceRow[]> {
+    const lineWkt = lineStringWktFromRoute(options.geometry);
+    if (!lineWkt) return [];
+
+    const result = await pool.query<StationDistanceRow>(
+      `
+        WITH route AS (
+          SELECT ST_GeomFromText($1, 4326)::geography AS geog
+        )
+        SELECT
+          s.*,
+          ST_Distance(
+            ST_SetSRID(ST_MakePoint(s.longitude, s.latitude), 4326)::geography,
+            route.geog
+          ) AS distance_to_route_meters
+        FROM stations s, route
+        WHERE s.ev_dc_fast_num > 0
+          AND ST_DWithin(
+            ST_SetSRID(ST_MakePoint(s.longitude, s.latitude), 4326)::geography,
+            route.geog,
+            $2
+          )
+      `,
+      [lineWkt, corridorMeters]
+    );
+
+    return result.rows;
+  }
+
+  let candidates: Array<StationRow | StationDistanceRow>;
+  let usingPostgisDistance = false;
+
+  try {
+    candidates = await getStationsNearRoutePostgis();
+    usingPostgisDistance = true;
+  } catch (error) {
+    console.warn('PostGIS route corridor query failed; falling back to bounding-box filter:', error);
+    const bounds = computeBounds(options.geometry, corridorMeters);
+    candidates = await getStationsInBounds(bounds);
+    usingPostgisDistance = false;
+  }
 
   for (const station of candidates) {
     if (!Number.isFinite(station.latitude) || !Number.isFinite(station.longitude)) continue;
@@ -468,12 +520,30 @@ async function getStationsAlongRoute(options: {
 
     const projection = projectPointOntoRoute(station.latitude, station.longitude, routeIndex);
     if (!projection) continue;
-    if (projection.distanceToRouteMeters > corridorMeters) continue;
+
+    let distanceToRouteMiles: number;
+    if (usingPostgisDistance) {
+      const row = station as StationDistanceRow;
+      if (!Number.isFinite(row.distance_to_route_meters)) continue;
+      distanceToRouteMiles = metersToMiles(row.distance_to_route_meters);
+      if (row.distance_to_route_meters > corridorMeters) continue;
+    } else {
+      if (projection.distanceToRouteMeters > corridorMeters) continue;
+      distanceToRouteMiles = metersToMiles(projection.distanceToRouteMeters);
+    }
+
+    let baseStation: StationRow;
+    if (usingPostgisDistance) {
+      const { distance_to_route_meters: _distance, ...rest } = station as StationDistanceRow;
+      baseStation = rest;
+    } else {
+      baseStation = station as StationRow;
+    }
 
     stations.push({
-      ...station,
+      ...baseStation,
       ev_connector_types: station.ev_connector_types ?? [],
-      distance_to_route_miles: metersToMiles(projection.distanceToRouteMeters),
+      distance_to_route_miles: distanceToRouteMiles,
       distance_along_route_miles: metersToMiles(projection.distanceAlongRouteMeters),
       distance_from_prev_miles: 0,
       distance_to_next_miles: 0,

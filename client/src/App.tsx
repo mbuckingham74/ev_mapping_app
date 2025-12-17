@@ -292,6 +292,12 @@ function RouteStationMarker({
           <div className="mt-2 text-sm">
             <p><strong>Chargers:</strong> {station.ev_dc_fast_num} DC Fast</p>
             <p><strong>Max:</strong> {station.max_power_kw ?? '—'} kW</p>
+            {station.rank_tier && typeof station.rank === 'number' && (
+              <p>
+                <strong>Rank:</strong> {station.rank_tier} #{station.rank}
+                {typeof station.rank_score === 'number' ? ` (${station.rank_score}/100)` : ''}
+              </p>
+            )}
             <p><strong>Off-route:</strong> {formatMiles(station.distance_to_route_miles)} mi</p>
             <p><strong>Mile marker:</strong> {formatMiles(station.distance_along_route_miles)} mi</p>
             <p><strong>From prev:</strong> {formatMiles(station.distance_from_prev_miles)} mi</p>

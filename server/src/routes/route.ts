@@ -70,6 +70,9 @@ type StationAlongRoute = StationRow & {
   distance_along_route_miles: number;
   distance_from_prev_miles: number;
   distance_to_next_miles: number;
+  rank_score?: number;
+  rank?: number;
+  rank_tier?: 'A' | 'B' | 'C' | 'D';
 };
 
 type AutoWaypoint = {
@@ -123,6 +126,65 @@ function computeTargetMaxGapMiles(rangeMiles: number, minArrivalPercent: number)
   const range = Math.max(0, rangeMiles);
   const pct = clampPercent(minArrivalPercent);
   return Math.max(0, range * (1 - pct / 100));
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function stationRankTier(score: number): 'A' | 'B' | 'C' | 'D' {
+  if (!Number.isFinite(score)) return 'D';
+  if (score >= 85) return 'A';
+  if (score >= 70) return 'B';
+  if (score >= 55) return 'C';
+  return 'D';
+}
+
+function computeStationRankScore(station: StationAlongRoute, corridorMiles: number): number {
+  const powerKw = typeof station.max_power_kw === 'number' && Number.isFinite(station.max_power_kw)
+    ? Math.max(0, station.max_power_kw)
+    : 0;
+  const stalls = Number.isFinite(station.ev_dc_fast_num) ? Math.max(0, station.ev_dc_fast_num) : 0;
+  const offRouteMiles = Number.isFinite(station.distance_to_route_miles) ? Math.max(0, station.distance_to_route_miles) : 0;
+
+  const powerScore = clamp01(powerKw / 350);
+  const stallsScore = clamp01(stalls / 10);
+  const offRouteScore = corridorMiles > 0 ? clamp01(1 - offRouteMiles / corridorMiles) : 1;
+  const statusMultiplier = station.status_code === 'E' ? 1 : 0.4;
+
+  const weighted = (powerScore * 0.5) + (stallsScore * 0.35) + (offRouteScore * 0.15);
+  const score = Math.round(clamp01(weighted) * 100 * statusMultiplier);
+  return Math.max(0, Math.min(100, score));
+}
+
+function applyStationRanking(stations: StationAlongRoute[], corridorMiles: number): void {
+  for (const station of stations) {
+    const score = computeStationRankScore(station, corridorMiles);
+    station.rank_score = score;
+    station.rank_tier = stationRankTier(score);
+  }
+
+  const ranked = [...stations].sort((a, b) => {
+    const scoreA = a.rank_score ?? 0;
+    const scoreB = b.rank_score ?? 0;
+    if (scoreB !== scoreA) return scoreB - scoreA;
+
+    const powerA = typeof a.max_power_kw === 'number' && Number.isFinite(a.max_power_kw) ? a.max_power_kw : 0;
+    const powerB = typeof b.max_power_kw === 'number' && Number.isFinite(b.max_power_kw) ? b.max_power_kw : 0;
+    if (powerB !== powerA) return powerB - powerA;
+
+    const stallsA = Number.isFinite(a.ev_dc_fast_num) ? a.ev_dc_fast_num : 0;
+    const stallsB = Number.isFinite(b.ev_dc_fast_num) ? b.ev_dc_fast_num : 0;
+    if (stallsB !== stallsA) return stallsB - stallsA;
+
+    if (a.distance_to_route_miles !== b.distance_to_route_miles) return a.distance_to_route_miles - b.distance_to_route_miles;
+    return a.distance_along_route_miles - b.distance_along_route_miles;
+  });
+
+  for (let i = 0; i < ranked.length; i += 1) {
+    ranked[i]!.rank = i + 1;
+  }
 }
 
 function haversineDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -1192,6 +1254,7 @@ router.post('/', async (req, res) => {
     };
 
     if (includeStations) {
+      applyStationRanking(chosenStations ?? [], corridorMiles);
       responseBody.corridor_miles = corridorMiles;
       responseBody.stations = chosenStations ?? [];
       responseBody.preference = preference;

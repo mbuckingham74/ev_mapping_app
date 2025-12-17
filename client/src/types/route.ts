@@ -17,6 +17,9 @@ export type RouteStation = Station & {
   distance_along_route_miles: number;
   distance_from_prev_miles: number;
   distance_to_next_miles: number;
+  rank_score?: number;
+  rank?: number;
+  rank_tier?: 'A' | 'B' | 'C' | 'D';
 };
 
 export type AutoWaypoint = {

@@ -63,6 +63,20 @@ function formatMiles(miles: number): string {
   return `${Math.round(miles)} mi`;
 }
 
+function rankBadgeClasses(tier: 'A' | 'B' | 'C' | 'D'): string {
+  switch (tier) {
+    case 'A':
+      return 'border-emerald-700 bg-emerald-900/40 text-emerald-100';
+    case 'B':
+      return 'border-sky-700 bg-sky-900/40 text-sky-100';
+    case 'C':
+      return 'border-amber-700 bg-amber-900/40 text-amber-100';
+    case 'D':
+    default:
+      return 'border-slate-600 bg-slate-800/40 text-slate-200';
+  }
+}
+
 export default function RoutePlanner({
   route,
   loading,
@@ -561,8 +575,21 @@ export default function RoutePlanner({
                       <div className="font-medium text-slate-100 truncate">
                         {idx + 1}. {station.station_name}
                       </div>
-                      <div className="shrink-0 text-slate-200">
-                        +{formatMiles(station.distance_from_prev_miles)}
+                      <div className="shrink-0 flex items-center gap-2">
+                        {station.rank_tier && typeof station.rank === 'number' && (
+                          <span
+                            className={[
+                              'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+                              rankBadgeClasses(station.rank_tier),
+                            ].join(' ')}
+                            title={typeof station.rank_score === 'number' ? `Score ${station.rank_score}/100` : undefined}
+                          >
+                            {station.rank_tier} #{station.rank}
+                          </span>
+                        )}
+                        <span className="text-slate-200">
+                          +{formatMiles(station.distance_from_prev_miles)}
+                        </span>
                       </div>
                     </div>
                     <div className="mt-0.5 flex justify-between gap-3 text-slate-400">

@@ -1,6 +1,28 @@
 import type { Station } from '../types/station';
+import type { RouteResponse } from '../types/route';
 
 const API_BASE = '/api';
+
+export async function fetchRoute(
+  start: string,
+  end: string,
+  waypoints: string[] = []
+): Promise<RouteResponse> {
+  const response = await fetch(`${API_BASE}/route`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ start, end, waypoints }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to plan route: ${response.statusText}`);
+  }
+
+  return response.json();
+}
 
 export async function fetchStations(state?: string): Promise<Station[]> {
   const url = state

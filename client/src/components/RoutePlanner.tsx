@@ -1,0 +1,172 @@
+import { useMemo, useState } from 'react';
+import type { RouteResponse } from '../types/route';
+
+type Props = {
+  route: RouteResponse | null;
+  loading: boolean;
+  error: string | null;
+  onPlanRoute: (params: { start: string; end: string; waypoints: string[] }) => Promise<void>;
+  onClearRoute: () => void;
+};
+
+function formatDistanceMiles(meters: number): string {
+  const miles = meters / 1609.344;
+  if (miles < 10) return `${miles.toFixed(1)} mi`;
+  return `${Math.round(miles)} mi`;
+}
+
+function formatDuration(durationSeconds: number): string {
+  const totalMinutes = Math.round(durationSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) return `${minutes} min`;
+  return `${hours}h ${minutes}m`;
+}
+
+export default function RoutePlanner({ route, loading, error, onPlanRoute, onClearRoute }: Props) {
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [waypoints, setWaypoints] = useState<string[]>([]);
+
+  const canSubmit = useMemo(() => {
+    return start.trim().length > 0 && end.trim().length > 0 && !loading;
+  }, [start, end, loading]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSubmit) return;
+    await onPlanRoute({
+      start: start.trim(),
+      end: end.trim(),
+      waypoints: waypoints.map((w) => w.trim()).filter(Boolean),
+    });
+  }
+
+  function addWaypoint() {
+    setWaypoints((prev) => [...prev, '']);
+  }
+
+  function removeWaypoint(index: number) {
+    setWaypoints((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateWaypoint(index: number, value: string) {
+    setWaypoints((prev) => prev.map((w, i) => (i === index ? value : w)));
+  }
+
+  return (
+    <div className="bg-slate-900/95 text-slate-100 border border-slate-700 rounded-lg shadow-lg p-4 backdrop-blur">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold">Plan a route</h2>
+          <p className="text-xs text-slate-400">Enter a city or full address.</p>
+        </div>
+        {route && (
+          <button
+            type="button"
+            onClick={onClearRoute}
+            className="text-xs text-slate-300 hover:text-white underline"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      <form onSubmit={handleSubmit} className="mt-3 space-y-3">
+        <div>
+          <label className="block text-xs text-slate-300 mb-1" htmlFor="route-start">Start</label>
+          <input
+            id="route-start"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            placeholder="e.g. Austin, TX"
+            className="w-full rounded-md bg-slate-800 border border-slate-700 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+            autoComplete="off"
+          />
+        </div>
+
+        {waypoints.length > 0 && (
+          <div className="space-y-2">
+            {waypoints.map((value, idx) => (
+              <div key={idx} className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs text-slate-300 mb-1" htmlFor={`route-waypoint-${idx}`}>
+                    Waypoint {idx + 1}
+                  </label>
+                  <input
+                    id={`route-waypoint-${idx}`}
+                    value={value}
+                    onChange={(e) => updateWaypoint(idx, e.target.value)}
+                    placeholder="Optional stop"
+                    className="w-full rounded-md bg-slate-800 border border-slate-700 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="pt-6">
+                  <button
+                    type="button"
+                    onClick={() => removeWaypoint(idx)}
+                    className="text-xs text-slate-300 hover:text-white underline"
+                    aria-label={`Remove waypoint ${idx + 1}`}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div>
+          <button
+            type="button"
+            onClick={addWaypoint}
+            className="text-xs text-slate-300 hover:text-white underline"
+          >
+            + Add waypoint
+          </button>
+        </div>
+
+        <div>
+          <label className="block text-xs text-slate-300 mb-1" htmlFor="route-end">End</label>
+          <input
+            id="route-end"
+            value={end}
+            onChange={(e) => setEnd(e.target.value)}
+            placeholder="e.g. Dallas, TX"
+            className="w-full rounded-md bg-slate-800 border border-slate-700 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+            autoComplete="off"
+          />
+        </div>
+
+        {error && (
+          <div className="text-xs text-red-200 bg-red-900/50 border border-red-800 rounded-md px-3 py-2">
+            {error}
+          </div>
+        )}
+
+        {route && (
+          <div className="text-xs text-slate-200 bg-slate-800/60 border border-slate-700 rounded-md px-3 py-2">
+            <div className="flex justify-between">
+              <span className="text-slate-300">Distance</span>
+              <span className="font-medium">{formatDistanceMiles(route.summary.distance_meters)}</span>
+            </div>
+            <div className="flex justify-between mt-1">
+              <span className="text-slate-300">Duration</span>
+              <span className="font-medium">{formatDuration(route.summary.duration_seconds)}</span>
+            </div>
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="w-full rounded-md bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 disabled:text-slate-400 px-3 py-2 text-sm font-medium"
+        >
+          {loading ? 'Planning…' : 'Plan route'}
+        </button>
+      </form>
+    </div>
+  );
+}
+

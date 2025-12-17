@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { useEffect, useMemo, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { fetchStations, fetchStationCount } from './services/api';
+import { fetchRoute, fetchStations, fetchStationCount } from './services/api';
 import type { Station } from './types/station';
+import type { RouteResponse } from './types/route';
+import RoutePlanner from './components/RoutePlanner';
 
 // Fix Leaflet marker icons
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -18,11 +20,31 @@ L.Icon.Default.mergeOptions({
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795]; // Center of US
 const DEFAULT_ZOOM = 4;
 
+function FitRouteBounds({ geometry }: { geometry: [number, number][] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!geometry || geometry.length === 0) return;
+    const bounds = L.latLngBounds(geometry.map(([lat, lng]) => L.latLng(lat, lng)));
+    map.fitBounds(bounds, { padding: [40, 40] });
+  }, [map, geometry]);
+
+  return null;
+}
+
 function App() {
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [count, setCount] = useState<number>(0);
+  const [route, setRoute] = useState<RouteResponse | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
+
+  const routeStops = useMemo(() => {
+    if (!route) return [];
+    return route.points.map((p) => ({ ...p, position: [p.lat, p.lng] as [number, number] }));
+  }, [route]);
 
   useEffect(() => {
     loadData();
@@ -44,6 +66,24 @@ function App() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handlePlanRoute(params: { start: string; end: string; waypoints: string[] }) {
+    setRouteLoading(true);
+    setRouteError(null);
+    try {
+      const data = await fetchRoute(params.start, params.end, params.waypoints);
+      setRoute(data);
+    } catch (err) {
+      setRouteError(err instanceof Error ? err.message : 'Failed to plan route');
+    } finally {
+      setRouteLoading(false);
+    }
+  }
+
+  function handleClearRoute() {
+    setRoute(null);
+    setRouteError(null);
   }
 
   return (
@@ -72,7 +112,16 @@ function App() {
       )}
 
       {/* Map */}
-      <div className="flex-1">
+      <div className="flex-1 relative">
+        <div className="absolute top-4 left-4 z-[1000] w-[360px] max-w-[calc(100%-2rem)]">
+          <RoutePlanner
+            route={route}
+            loading={routeLoading}
+            error={routeError}
+            onPlanRoute={handlePlanRoute}
+            onClearRoute={handleClearRoute}
+          />
+        </div>
         <MapContainer
           center={DEFAULT_CENTER}
           zoom={DEFAULT_ZOOM}
@@ -83,6 +132,28 @@ function App() {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
+
+          {route && (
+            <>
+              <Polyline
+                positions={route.geometry}
+                pathOptions={{ color: '#0ea5e9', weight: 5, opacity: 0.9 }}
+              />
+              <FitRouteBounds geometry={route.geometry} />
+              {routeStops.map((stop, idx) => (
+                <Marker key={`route-stop-${idx}`} position={stop.position}>
+                  <Popup>
+                    <div className="min-w-[200px]">
+                      <h3 className="font-bold text-slate-900">
+                        {idx === 0 ? 'Start' : idx === routeStops.length - 1 ? 'End' : `Waypoint ${idx}`}
+                      </h3>
+                      <p className="text-slate-600 text-sm">{stop.label}</p>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+            </>
+          )}
 
           {stations.map((station) => (
             <Marker key={station.id} position={[station.latitude, station.longitude]}>

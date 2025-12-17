@@ -4,6 +4,7 @@ import { config } from './config.js';
 import { verifyDbConnection } from './db.js';
 import { runMigrations } from './migrations.js';
 import stationsRouter from './routes/stations.js';
+import routeRouter from './routes/route.js';
 
 const app = express();
 const PORT = config.port;
@@ -16,6 +17,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api/stations', stationsRouter);
+app.use('/api/route', routeRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {

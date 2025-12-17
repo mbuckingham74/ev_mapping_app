@@ -166,7 +166,7 @@ function App() {
             <>
               <Polyline
                 positions={route.geometry}
-                pathOptions={{ color: '#0ea5e9', weight: 5, opacity: 0.9 }}
+                pathOptions={{ color: '#ef4444', weight: 5, opacity: 0.9 }}
               />
               <FitRouteBounds geometry={route.geometry} />
               {routeStops.map((stop, idx) => (

@@ -873,22 +873,12 @@ async function optimizeRouteWithAutoWaypoints(options: {
     }
   }
 
-  let warning: string | undefined;
-  if (current.maxGapMiles > targetMaxGapMiles) {
-    if (autoWaypoints.length === 0) {
-      warning = 'Could not find a better charger-optimized route within the detour limits; using the fastest route instead.';
-    } else {
-      warning = `Charger-optimized route found, but max gap is still ${Math.round(current.maxGapMiles)} mi (target ≤ ${Math.round(targetMaxGapMiles)} mi).`;
-    }
-  }
-
   return {
     chosen: current.route,
     chosenStations: current.stations,
     maxGapMiles: current.maxGapMiles,
     autoWaypoints,
     evaluatedRoutes,
-    warning,
   };
 }
 

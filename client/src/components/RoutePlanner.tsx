@@ -11,6 +11,7 @@ type Props = {
   onOpenAuth?: () => void;
   defaultCorridorMiles?: number;
   defaultPreference?: 'fastest' | 'charger_optimized';
+  rangeMiles?: number;
   initialParams?: {
     start: string;
     end: string;
@@ -70,6 +71,7 @@ export default function RoutePlanner({
   onOpenAuth,
   defaultCorridorMiles,
   defaultPreference,
+  rangeMiles,
   initialParams,
   savedRoutes,
   savedRoutesLoading,
@@ -93,6 +95,40 @@ export default function RoutePlanner({
   const [showSavedRoutes, setShowSavedRoutes] = useState(false);
 
   const routeStations = useMemo(() => route?.stations ?? [], [route]);
+
+  const gapAlert = useMemo(() => {
+    if (!route || typeof route.max_gap_miles !== 'number' || !Number.isFinite(route.max_gap_miles)) return null;
+    const effectiveRange = typeof rangeMiles === 'number' && Number.isFinite(rangeMiles) ? Math.max(0, rangeMiles) : 210;
+    if (effectiveRange <= 0) return null;
+
+    const maxGap = route.max_gap_miles;
+    const bufferMiles = effectiveRange - maxGap;
+
+    if (maxGap > effectiveRange) {
+      return {
+        level: 'danger' as const,
+        message: `No viable EA-only path for your ${Math.round(effectiveRange)} mi range (max gap ${Math.round(maxGap)} mi). Increase corridor miles, add waypoints, or use another network.`,
+      };
+    }
+
+    // Warn only when we're within ~15 miles of the configured range.
+    if (bufferMiles <= 15) {
+      const arrivalPercent = Math.max(0, Math.round((bufferMiles / effectiveRange) * 100));
+      return {
+        level: 'warning' as const,
+        message: `Risky max gap: ${Math.round(maxGap)} mi (buffer ${Math.round(bufferMiles)} mi, ~${arrivalPercent}% of your range). You may need to slow down, draft, or reroute.`,
+      };
+    }
+
+    return null;
+  }, [rangeMiles, route]);
+
+  const optimizerNote = useMemo(() => {
+    if (!route) return null;
+    if (route.requested_preference !== 'charger_optimized') return null;
+    if (route.preference !== 'fastest') return null;
+    return 'No charger-optimized alternative found within detour limits; showing the fastest route.';
+  }, [route]);
 
   useEffect(() => {
     if (initialParams) return;
@@ -357,6 +393,25 @@ export default function RoutePlanner({
         {route?.warning && (
           <div className="text-xs text-amber-100 bg-amber-900/40 border border-amber-800 rounded-md px-3 py-2">
             {route.warning}
+          </div>
+        )}
+
+        {gapAlert && (
+          <div
+            className={[
+              'text-xs rounded-md px-3 py-2',
+              gapAlert.level === 'danger'
+                ? 'text-red-100 bg-red-900/50 border border-red-800'
+                : 'text-amber-100 bg-amber-900/40 border border-amber-800',
+            ].join(' ')}
+          >
+            {gapAlert.message}
+          </div>
+        )}
+
+        {optimizerNote && (
+          <div className="text-[11px] text-slate-400">
+            {optimizerNote}
           </div>
         )}
 

@@ -632,6 +632,7 @@ function App() {
             onOpenAuth={() => setAuthModalOpen(true)}
             defaultCorridorMiles={preferences?.default_corridor_miles}
             defaultPreference={preferences?.default_preference}
+            rangeMiles={preferences?.range_miles}
             onSaveRoute={user ? handleSaveRoute : undefined}
             onLoadSavedRoute={handleLoadSavedRoute}
           />

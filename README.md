@@ -9,6 +9,8 @@ Web app for planning routes and viewing Electrify America DC fast-charging stati
 - Route planning (start/end + optional waypoints)
 - “DC charger optimized” mode (may choose a longer route to include more stations)
 - Accurate stations-along-route corridor filtering via PostGIS (plus max-gap calculation)
+- Elevation metrics (route total gain/loss + per-leg gain/loss between stations)
+- Auto-expands corridor (when needed) to find EA-viable routes within your range
 - DB-backed caching for ORS geocoding/directions and full route responses
 - Station ranking (A–D tiers) for stations along your route
 - Accounts: save routes + store vehicle preferences (range, corridor, detour factor, etc.)

@@ -1,4 +1,4 @@
-# EA Route Planner
+# EV
 
 Web app for planning routes and viewing Electrify America DC fast-charging stations on a map, backed by Postgres + PostGIS.
 

@@ -592,7 +592,7 @@ function App() {
       <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-lg font-semibold text-white">EA Route Planner</h1>
+            <h1 className="text-lg font-semibold text-white">EV</h1>
             <p className="text-sm text-slate-400">Electrify America station finder</p>
           </div>
           <div className="flex items-center gap-3 text-sm text-slate-400">

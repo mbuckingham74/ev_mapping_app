@@ -29,10 +29,10 @@ const AUTO_WAYPOINT_ICON = L.divIcon({
   popupAnchor: [0, -14],
 });
 
-const TRUCK_STOP_ICON = (() => {
+function createPinIcon(options: { fill: string; stroke: string }): L.Icon {
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
-      <path d="M12.5 0C5.6 0 0 5.6 0 12.5c0 9.4 12.5 28.5 12.5 28.5S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0z" fill="#f97316" stroke="#9a3412" stroke-width="1"/>
+      <path d="M12.5 0C5.6 0 0 5.6 0 12.5c0 9.4 12.5 28.5 12.5 28.5S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0z" fill="${options.fill}" stroke="${options.stroke}" stroke-width="1"/>
       <circle cx="12.5" cy="12.5" r="5" fill="#fff"/>
     </svg>
   `.trim();
@@ -49,7 +49,11 @@ const TRUCK_STOP_ICON = (() => {
     shadowSize: [41, 41],
     shadowAnchor: [12, 41],
   });
-})();
+}
+
+const START_ICON = createPinIcon({ fill: '#22c55e', stroke: '#14532d' });
+const END_ICON = createPinIcon({ fill: '#ef4444', stroke: '#7f1d1d' });
+const TRUCK_STOP_ICON = createPinIcon({ fill: '#f97316', stroke: '#9a3412' });
 
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795]; // Center of US
 const DEFAULT_ZOOM = 4;
@@ -779,7 +783,11 @@ function App() {
               <FitRouteBounds geometry={route.geometry} />
               <PanToSelection position={selectedStation ? [selectedStation.latitude, selectedStation.longitude] : null} />
               {routeStops.map((stop, idx) => (
-                <Marker key={`route-stop-${idx}`} position={stop.position}>
+                <Marker
+                  key={`route-stop-${idx}`}
+                  position={stop.position}
+                  icon={idx === 0 ? START_ICON : idx === routeStops.length - 1 ? END_ICON : undefined}
+                >
                   <Popup>
                     <div className="min-w-[200px]">
                       <h3 className="font-bold text-slate-900">

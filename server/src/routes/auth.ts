@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword } from '../auth/password.js';
 import { clearSessionCookie, createSession, deleteSessionByToken, getCookie, setSessionCookie } from '../auth/session.js';
 import { config } from '../config.js';
 import { requireAuth } from '../middleware/auth.js';
+import { loginLimiter, signupLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
 
@@ -79,7 +80,7 @@ router.get('/me', async (req, res) => {
   }
 });
 
-router.post('/signup', async (req, res) => {
+router.post('/signup', signupLimiter, async (req, res) => {
   try {
     const emailRaw = ensureString((req.body as { email?: unknown } | undefined)?.email);
     const password = ensureString((req.body as { password?: unknown } | undefined)?.password);
@@ -125,7 +126,7 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const emailRaw = ensureString((req.body as { email?: unknown } | undefined)?.email);
     const password = ensureString((req.body as { password?: unknown } | undefined)?.password);

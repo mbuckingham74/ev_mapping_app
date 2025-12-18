@@ -15,6 +15,10 @@ const PORT = config.port;
 // Remove Express version disclosure
 app.disable('x-powered-by');
 
+// Trust proxy for correct client IP behind reverse proxy (Nginx Proxy Manager)
+// Required for rate limiting to work correctly
+app.set('trust proxy', 1);
+
 // Security headers (API-relevant only; CSP/COOP/COEP omitted as they apply to HTML documents)
 app.use((_req, res, next) => {
   // Prevent MIME-sniffing (relevant for any response)

@@ -21,12 +21,14 @@
 - **Smart Route Planning** — Enter cities or full addresses with optional waypoints
 - **DC Charger Optimized Mode** — Finds routes that maximize charging options, even if slightly longer
 - **Corridor-Based Station Search** — PostGIS-powered queries find stations within X miles of your route
+- **Truck Stops Along Route** — Plots truck stop POIs within the corridor (orange markers) with brand filtering
 - **Auto-Expanding Corridors** — Automatically widens search when needed to ensure viable charging gaps
 - **Elevation Metrics** — See total climb/descent plus per-leg elevation changes between stations
 - **Station Ranking** — A–D tier ratings based on charger power, stall count, and proximity
 - **Risk Alerts** — Warnings when gaps exceed your range or you'd arrive below minimum charge
 - **User Accounts** — Save routes and vehicle preferences (range, efficiency, min arrival %)
 - **Shareable Links** — Generate URLs with route parameters for easy sharing
+- **Color-Coded Route Endpoints** — Start marker is green; destination marker is red
 
 ## Tech Stack
 
@@ -52,6 +54,7 @@ ev-app/
 │   │   ├── routes/         # API endpoints
 │   │   └── migrations/     # Database migrations
 │   └── Dockerfile
+├── truck_stop_location_data/ # Truck stop POIs (CSV)
 └── docker-compose.yml      # Production deployment
 ```
 
@@ -109,14 +112,14 @@ This fetches ~1,100 Electrify America stations from OpenChargeMap.
 
 | Endpoint | Description |
 |----------|-------------|
-| `POST /api/route` | Plan a route with stations along the corridor |
+| `POST /api/route` | Plan a route with EA stations + truck stops along the corridor |
 | `GET /api/stations` | List all stations (optionally filter by state) |
 | `GET /api/stations/near/:lat/:lng` | Find stations near a location |
 | `POST /api/auth/signup` | Create account |
 | `POST /api/auth/login` | Sign in |
 | `GET /api/saved-routes` | List saved routes |
 
-See the [API documentation](.ev_mapping_app.md) for full details.
+See `.ev_mapping_app.md` (internal technical notes) for full details.
 
 ## How It Works
 

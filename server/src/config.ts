@@ -23,6 +23,13 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function readSslMode(): 'verify' | 'no-verify' {
+  const raw = process.env.DB_SSL_MODE;
+  if (!raw) return 'verify';
+  if (raw === 'verify' || raw === 'no-verify') return raw;
+  throw new Error(`Invalid DB_SSL_MODE: "${raw}" (must be 'verify' or 'no-verify')`);
+}
+
 export const config = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: readIntEnv('PORT', 3001),
@@ -43,6 +50,11 @@ export const config = {
     user: process.env.DB_USER ?? 'ea_planner',
     password: requireEnv('DB_PASSWORD'),
     ssl: process.env.DB_SSL === 'true',
+    sslMode: readSslMode(),
+    // Pool settings (configurable for different deployment sizes)
+    poolMax: readIntEnv('DB_POOL_MAX', 20),
+    poolConnectionTimeoutMs: readIntEnv('DB_POOL_CONNECTION_TIMEOUT_MS', 5000),
+    poolIdleTimeoutMs: readIntEnv('DB_POOL_IDLE_TIMEOUT_MS', 30000),
   },
   apiKeys: {
     nrel: process.env.NREL_API_KEY,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, ZoomControl, useMap, useMapEvents } from 'react-leaflet';
+import { CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, Tooltip, ZoomControl, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { createSavedRoute, fetchMe, fetchRoute, fetchSavedRoute, fetchSavedRoutes, fetchStations, fetchStationCount, login, logout, signup, updatePreferences } from './services/api';
 import type { Station } from './types/station';
@@ -54,10 +54,13 @@ function createPinIcon(options: { fill: string; stroke: string }): L.Icon {
 const START_ICON = createPinIcon({ fill: '#22c55e', stroke: '#14532d' });
 const END_ICON = createPinIcon({ fill: '#ef4444', stroke: '#7f1d1d' });
 const TRUCK_STOP_ICON = createPinIcon({ fill: '#f97316', stroke: '#9a3412' });
+const MUST_STOP_ICON = createPinIcon({ fill: '#facc15', stroke: '#92400e' });
 
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795]; // Center of US
 const DEFAULT_ZOOM = 4;
 const METERS_PER_MILE = 1609.344;
+const MUST_STOP_GAP_MILES = 120;
+const MUST_STOP_AFTER_MILES = 50;
 
 type RoutePlanParams = {
   start: string;
@@ -282,6 +285,7 @@ function RouteStationMarker({
   mapZoom,
   selected,
   isAutoWaypoint,
+  isMustStop,
   onSelect,
 }: {
   station: RouteStation;
@@ -289,10 +293,15 @@ function RouteStationMarker({
   mapZoom: number;
   selected: boolean;
   isAutoWaypoint: boolean;
+  isMustStop: boolean;
   onSelect: (stationId: number) => void;
 }) {
   const markerRef = useRef<L.Marker>(null);
-  const iconProps = useMemo(() => (isAutoWaypoint ? { icon: AUTO_WAYPOINT_ICON } : {}), [isAutoWaypoint]);
+  const iconProps = useMemo(() => {
+    if (isAutoWaypoint) return { icon: AUTO_WAYPOINT_ICON };
+    if (isMustStop) return { icon: MUST_STOP_ICON };
+    return {};
+  }, [isAutoWaypoint, isMustStop]);
 
   useEffect(() => {
     if (!selected) return;
@@ -300,60 +309,81 @@ function RouteStationMarker({
   }, [selected]);
 
   return (
-    <Marker
-      ref={markerRef}
-      position={[station.latitude, station.longitude]}
-      zIndexOffset={selected ? 1_000 : 0}
-      eventHandlers={{
-        click: () => onSelect(station.id),
-      }}
-      {...iconProps}
+    <>
+      {isMustStop && (
+        <CircleMarker
+          center={[station.latitude, station.longitude]}
+          radius={18}
+          interactive={false}
+          pathOptions={{
+            color: '#facc15',
+            weight: 3,
+            opacity: 0.95,
+            fillColor: '#facc15',
+            fillOpacity: 0.15,
+          }}
+        />
+      )}
+      <Marker
+        ref={markerRef}
+        position={[station.latitude, station.longitude]}
+        zIndexOffset={selected ? 1_000 : 0}
+        eventHandlers={{
+          click: () => onSelect(station.id),
+        }}
+        {...iconProps}
       >
-        <Tooltip
-          permanent={mapZoom >= 9}
-          direction="top"
-          offset={[0, -10]}
-          opacity={0.9}
-        >
-        {index === 0
-          ? `+${formatMiles(station.distance_from_prev_miles)} mi${formatElevationFeet(station.elevation_from_prev_ft) ? ` • ${formatElevationFeet(station.elevation_from_prev_ft)}` : ''} from start`
-          : `+${formatMiles(station.distance_from_prev_miles)} mi${formatElevationFeet(station.elevation_from_prev_ft) ? ` • ${formatElevationFeet(station.elevation_from_prev_ft)}` : ''}`}
-      </Tooltip>
-      <Popup>
-        <div className="min-w-[220px]">
-          <h3 className="font-bold text-slate-900">{station.station_name}</h3>
-          <p className="text-slate-600 text-sm">
-            {station.street_address}<br />
-            {station.city}, {station.state} {station.zip}
-          </p>
-          <div className="mt-2 text-sm">
-            <p><strong>Chargers:</strong> {station.ev_dc_fast_num} DC Fast</p>
-            <p><strong>Max:</strong> {station.max_power_kw ?? '—'} kW</p>
-            {station.rank_tier && typeof station.rank === 'number' && (
+          <Tooltip
+            permanent={mapZoom >= 9}
+            direction="top"
+            offset={[0, -10]}
+            opacity={0.9}
+          >
+          {index === 0
+            ? `+${formatMiles(station.distance_from_prev_miles)} mi${formatElevationFeet(station.elevation_from_prev_ft) ? ` • ${formatElevationFeet(station.elevation_from_prev_ft)}` : ''} from start`
+            : `+${formatMiles(station.distance_from_prev_miles)} mi${formatElevationFeet(station.elevation_from_prev_ft) ? ` • ${formatElevationFeet(station.elevation_from_prev_ft)}` : ''}`}
+        </Tooltip>
+        <Popup>
+          <div className="min-w-[220px]">
+            <h3 className="font-bold text-slate-900">{station.station_name}</h3>
+            <p className="text-slate-600 text-sm">
+              {station.street_address}<br />
+              {station.city}, {station.state} {station.zip}
+            </p>
+            <div className="mt-2 text-sm">
+              <p><strong>Chargers:</strong> {station.ev_dc_fast_num} DC Fast</p>
+              <p><strong>Max:</strong> {station.max_power_kw ?? '—'} kW</p>
+              {station.rank_tier && typeof station.rank === 'number' && (
+                <p>
+                  <strong>Rank:</strong> {station.rank_tier} #{station.rank}
+                  {typeof station.rank_score === 'number' ? ` (${station.rank_score}/100)` : ''}
+                </p>
+              )}
+              <p><strong>Off-route:</strong> {formatMiles(station.distance_to_route_miles)} mi</p>
+              <p><strong>Mile marker:</strong> {formatMiles(station.distance_along_route_miles)} mi</p>
               <p>
-                <strong>Rank:</strong> {station.rank_tier} #{station.rank}
-                {typeof station.rank_score === 'number' ? ` (${station.rank_score}/100)` : ''}
+                <strong>From prev:</strong> {formatMiles(station.distance_from_prev_miles)} mi
+                {formatElevationFeet(station.elevation_from_prev_ft) ? ` (${formatElevationFeet(station.elevation_from_prev_ft)})` : ''}
               </p>
-            )}
-            <p><strong>Off-route:</strong> {formatMiles(station.distance_to_route_miles)} mi</p>
-            <p><strong>Mile marker:</strong> {formatMiles(station.distance_along_route_miles)} mi</p>
-            <p>
-              <strong>From prev:</strong> {formatMiles(station.distance_from_prev_miles)} mi
-              {formatElevationFeet(station.elevation_from_prev_ft) ? ` (${formatElevationFeet(station.elevation_from_prev_ft)})` : ''}
-            </p>
-            <p>
-              <strong>To next:</strong> {formatMiles(station.distance_to_next_miles)} mi
-              {formatElevationFeet(station.elevation_to_next_ft) ? ` (${formatElevationFeet(station.elevation_to_next_ft)})` : ''}
-            </p>
-            {isAutoWaypoint && (
-              <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-800">
-                Optimizer waypoint
+              <p>
+                <strong>To next:</strong> {formatMiles(station.distance_to_next_miles)} mi
+                {formatElevationFeet(station.elevation_to_next_ft) ? ` (${formatElevationFeet(station.elevation_to_next_ft)})` : ''}
               </p>
-            )}
+              {isAutoWaypoint && (
+                <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-800">
+                  Optimizer waypoint
+                </p>
+              )}
+              {isMustStop && (
+                <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                  MUST STOP
+                </p>
+              )}
+            </div>
           </div>
-        </div>
-      </Popup>
-    </Marker>
+        </Popup>
+      </Marker>
+    </>
   );
 }
 
@@ -368,6 +398,7 @@ function App() {
   const [mapZoom, setMapZoom] = useState<number>(DEFAULT_ZOOM);
   const [selectedStationId, setSelectedStationId] = useState<number | null>(null);
   const [selectedTruckStopBrands, setSelectedTruckStopBrands] = useState<Set<string>>(() => new Set());
+  const [showMustStopsOnly, setShowMustStopsOnly] = useState<boolean>(false);
   const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
   const [savedRoutesLoading, setSavedRoutesLoading] = useState(false);
   const [savedRoutesError, setSavedRoutesError] = useState<string | null>(null);
@@ -387,6 +418,22 @@ function App() {
   const routeStations = useMemo<RouteStation[]>(() => {
     return route?.stations ?? [];
   }, [route]);
+
+  const mustStopStationIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const station of routeStations) {
+      if (station.distance_from_prev_miles > MUST_STOP_GAP_MILES && station.distance_to_next_miles > MUST_STOP_AFTER_MILES) {
+        ids.add(station.id);
+      }
+    }
+    return ids;
+  }, [routeStations]);
+
+  const visibleRouteStations = useMemo(() => {
+    if (!showMustStopsOnly) return routeStations;
+    if (mustStopStationIds.size === 0) return routeStations;
+    return routeStations.filter((station) => mustStopStationIds.has(station.id));
+  }, [mustStopStationIds, routeStations, showMustStopsOnly]);
 
   const routeTruckStops = useMemo<TruckStopAlongRoute[]>(() => {
     return route?.truck_stops ?? [];
@@ -448,6 +495,20 @@ function App() {
     return routeStations.find((s) => s.id === selectedStationId) ?? null;
   }, [routeStations, selectedStationId]);
 
+  useEffect(() => {
+    if (!showMustStopsOnly) return;
+    if (!selectedStationId) return;
+    if (mustStopStationIds.has(selectedStationId)) return;
+    setSelectedStationId(null);
+  }, [mustStopStationIds, selectedStationId, showMustStopsOnly]);
+
+  useEffect(() => {
+    if (!route) return;
+    if (!showMustStopsOnly) return;
+    if (mustStopStationIds.size > 0) return;
+    setShowMustStopsOnly(false);
+  }, [mustStopStationIds, route, showMustStopsOnly]);
+
   const maxGapHighlight = useMemo(() => {
     if (!route) return null;
     const totalMiles = route.summary.distance_meters / METERS_PER_MILE;
@@ -504,6 +565,13 @@ function App() {
   useEffect(() => {
     setSelectedStationId(null);
   }, [route]);
+
+  function handleSelectStation(stationId: number) {
+    if (showMustStopsOnly && !mustStopStationIds.has(stationId)) {
+      setShowMustStopsOnly(false);
+    }
+    setSelectedStationId(stationId);
+  }
 
   async function loadData() {
     setLoading(true);
@@ -734,7 +802,7 @@ function App() {
             savedRoutesError={savedRoutesError}
             onPlanRoute={handlePlanRoute}
             onClearRoute={handleClearRoute}
-            onSelectStation={(stationId) => setSelectedStationId(stationId)}
+            onSelectStation={handleSelectStation}
             selectedStationId={selectedStationId}
             truckStopBrandCounts={truckStopBrandCounts}
             truckStopTotalCount={routeTruckStops.length}
@@ -742,6 +810,9 @@ function App() {
             selectedTruckStopBrands={selectedTruckStopBrands}
             onToggleTruckStopBrand={toggleTruckStopBrand}
             onSetAllTruckStopBrands={setAllTruckStopBrands}
+            mustStopStationIds={mustStopStationIds}
+            showMustStopsOnly={showMustStopsOnly}
+            onSetShowMustStopsOnly={setShowMustStopsOnly}
             isAuthenticated={Boolean(user)}
             onOpenAuth={() => setAuthModalOpen(true)}
             defaultCorridorMiles={preferences?.default_corridor_miles}
@@ -841,7 +912,7 @@ function App() {
           )}
 
           {route ? (
-            routeStations.map((station, idx) => (
+            visibleRouteStations.map((station, idx) => (
               <RouteStationMarker
                 key={`route-station-${station.id}-${idx}`}
                 station={station}
@@ -849,6 +920,7 @@ function App() {
                 mapZoom={mapZoom}
                 selected={station.id === selectedStationId}
                 isAutoWaypoint={autoWaypointIds.has(station.id)}
+                isMustStop={mustStopStationIds.has(station.id)}
                 onSelect={setSelectedStationId}
               />
             ))

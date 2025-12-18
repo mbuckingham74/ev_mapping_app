@@ -24,6 +24,7 @@
 - **Auto Corridor (Min Clutter)** — Starts narrow and widens only if needed to keep max gaps within your range
 - **Truck Stops Along Route** — Plots truck stop POIs within the corridor (orange markers) with brand filtering
 - **Auto-Expanding Corridors** — Automatically widens search when needed to ensure viable charging gaps
+- **Must Stop Highlights** — Flags critical chargers and lets you filter the map down to only “MUST STOP” stations
 - **Elevation Metrics** — See total climb/descent plus per-leg elevation changes between stations
 - **Station Ranking** — A–D tier ratings based on charger power, stall count, and proximity
 - **Risk Alerts** — Warnings when gaps exceed your range or you'd arrive below minimum charge

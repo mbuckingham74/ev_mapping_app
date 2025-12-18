@@ -13,6 +13,9 @@ type Props = {
   selectedTruckStopBrands?: Set<string>;
   onToggleTruckStopBrand?: (brand: string) => void;
   onSetAllTruckStopBrands?: (selectAll: boolean) => void;
+  mustStopStationIds?: Set<number>;
+  showMustStopsOnly?: boolean;
+  onSetShowMustStopsOnly?: (showMustStopsOnly: boolean) => void;
   isAuthenticated?: boolean;
   onOpenAuth?: () => void;
   defaultCorridorMiles?: number;
@@ -113,6 +116,9 @@ export default function RoutePlanner({
   selectedTruckStopBrands,
   onToggleTruckStopBrand,
   onSetAllTruckStopBrands,
+  mustStopStationIds,
+  showMustStopsOnly,
+  onSetShowMustStopsOnly,
   isAuthenticated,
   onOpenAuth,
   defaultCorridorMiles,
@@ -146,6 +152,7 @@ export default function RoutePlanner({
   const [showSavedRoutes, setShowSavedRoutes] = useState(false);
 
   const routeStations = useMemo(() => route?.stations ?? [], [route]);
+  const mustStopCount = useMemo(() => mustStopStationIds?.size ?? 0, [mustStopStationIds]);
 
   const gapAlert = useMemo(() => {
     if (!route || typeof route.max_gap_miles !== 'number' || !Number.isFinite(route.max_gap_miles)) return null;
@@ -474,6 +481,12 @@ export default function RoutePlanner({
               <span className="text-slate-300">Stations (≤ {route.corridor_miles ?? 15} mi)</span>
               <span className="font-medium">{routeStations.length}</span>
             </div>
+            {mustStopStationIds && (
+              <div className="flex justify-between mt-1">
+                <span className="text-slate-300">Must stops</span>
+                <span className="font-medium">{mustStopCount}</span>
+              </div>
+            )}
             {typeof route.max_gap_miles === 'number' && (
               <div className="flex justify-between mt-1">
                 <span className="text-slate-300">Max gap</span>
@@ -685,6 +698,28 @@ export default function RoutePlanner({
 
         {route && (
           <div className="text-xs text-slate-200 bg-slate-800/40 border border-slate-700 rounded-md">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-700 px-3 py-2">
+              <div className="text-slate-300">
+                Stations
+              </div>
+              {mustStopStationIds && onSetShowMustStopsOnly && (
+                <label className="flex items-center gap-2 text-[11px] text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(showMustStopsOnly)}
+                    onChange={(e) => onSetShowMustStopsOnly(e.target.checked)}
+                    disabled={mustStopCount === 0}
+                    className="h-3.5 w-3.5 accent-amber-400 disabled:opacity-50"
+                  />
+                  <span className={mustStopCount === 0 ? 'text-slate-500' : undefined}>
+                    Must stops only (map)
+                  </span>
+                  <span className="tabular-nums text-slate-400">
+                    {mustStopCount}
+                  </span>
+                </label>
+              )}
+            </div>
             {routeStations.length === 0 ? (
               <div className="px-3 py-2 text-slate-300">
                 No EA stations found within {route.corridor_miles ?? 15} miles of this route.
@@ -708,6 +743,11 @@ export default function RoutePlanner({
                         {idx + 1}. {station.station_name}
                       </div>
                       <div className="shrink-0 flex items-center gap-2">
+                        {mustStopStationIds?.has(station.id) && (
+                          <span className="inline-flex items-center rounded-full border border-amber-700 bg-amber-900/40 px-2 py-0.5 text-[10px] font-semibold text-amber-100">
+                            MUST STOP
+                          </span>
+                        )}
                         {station.rank_tier && typeof station.rank === 'number' && (
                           <span
                             className={[

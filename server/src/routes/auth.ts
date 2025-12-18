@@ -1,12 +1,19 @@
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import { pool } from '../db.js';
 import { hashPassword, verifyPassword } from '../auth/password.js';
 import { clearSessionCookie, createSession, deleteSessionByToken, getCookie, setSessionCookie } from '../auth/session.js';
 import { config } from '../config.js';
 import { requireAuth } from '../middleware/auth.js';
 import { loginLimiter, signupLimiter } from '../middleware/rateLimiter.js';
+import { createLogger } from '../logger.js';
 
 const router = Router();
+const fallbackLog = createLogger('auth');
+
+// Use request-bound logger (with correlation ID) when available, fall back to module logger
+function getLog(req: Request) {
+  return req.log ?? fallbackLog;
+}
 
 function ensureString(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -75,7 +82,7 @@ router.get('/me', async (req, res) => {
     const preferences = await ensurePreferencesRow(req.user.id);
     return res.json({ user: req.user, preferences });
   } catch (error) {
-    console.error('Error loading current user:', error);
+    getLog(req).error({ err: error, userId: req.user?.id }, 'Error loading current user');
     return res.status(500).json({ error: 'Failed to load current user' });
   }
 });
@@ -121,7 +128,7 @@ router.post('/signup', signupLimiter, async (req, res) => {
 
     return res.status(201).json({ user: { id: created.id, email: created.email }, preferences });
   } catch (error) {
-    console.error('Signup error:', error);
+    getLog(req).error({ err: error }, 'Signup error');
     return res.status(500).json({ error: 'Failed to create account' });
   }
 });
@@ -153,7 +160,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     return res.json({ user: { id: user.id, email: user.email }, preferences });
   } catch (error) {
-    console.error('Login error:', error);
+    getLog(req).error({ err: error }, 'Login error');
     return res.status(500).json({ error: 'Failed to log in' });
   }
 });
@@ -167,7 +174,7 @@ router.post('/logout', async (req, res) => {
     clearSessionCookie(res);
     return res.json({ ok: true });
   } catch (error) {
-    console.error('Logout error:', error);
+    getLog(req).error({ err: error }, 'Logout error');
     clearSessionCookie(res);
     return res.status(500).json({ error: 'Failed to log out' });
   }
@@ -331,7 +338,7 @@ router.patch('/preferences', requireAuth, async (req, res) => {
 
     return res.json(updated.rows[0]);
   } catch (error) {
-    console.error('Error updating preferences:', error);
+    getLog(req).error({ err: error, userId: req.user?.id }, 'Error updating preferences');
     return res.status(500).json({ error: 'Failed to update preferences' });
   }
 });

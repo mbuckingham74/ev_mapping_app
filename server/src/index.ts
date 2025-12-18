@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import pinoHttp from 'pino-http';
 import { config } from './config.js';
 import { verifyDbConnection } from './db.js';
 import { runMigrations } from './migrations.js';
@@ -8,6 +9,7 @@ import routeRouter from './routes/route.js';
 import savedRoutesRouter from './routes/savedRoutes.js';
 import authRouter from './routes/auth.js';
 import { attachAuth } from './middleware/auth.js';
+import { logger } from './logger.js';
 
 const app = express();
 const PORT = config.port;
@@ -27,6 +29,31 @@ app.use((_req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   next();
 });
+
+// Request logging
+app.use(pinoHttp({
+  logger,
+  autoLogging: {
+    ignore: (req) => req.url?.startsWith('/api/health') ?? false,
+  },
+  customSuccessMessage: (req, res) => {
+    return `${req.method} ${req.url} ${res.statusCode}`;
+  },
+  customErrorMessage: (req, res, err) => {
+    return `${req.method} ${req.url} ${res.statusCode} - ${err.message}`;
+  },
+  // Redact sensitive headers while preserving request correlation
+  serializers: {
+    res: (res) => ({
+      statusCode: res.statusCode,
+    }),
+    req: (req) => ({
+      id: req.id,
+      method: req.method,
+      url: req.url,
+    }),
+  },
+}));
 
 // CORS
 app.use(cors({
@@ -66,7 +93,7 @@ app.use((err: Error & { status?: number; type?: string }, _req: express.Request,
   // Generic error fallback (avoids Express HTML error page)
   const status = err.status ?? 500;
   const message = status === 500 ? 'Internal server error' : err.message;
-  console.error('Unhandled error:', err);
+  logger.error({ err }, 'Unhandled error');
   return res.status(status).json({ error: message });
 });
 
@@ -74,14 +101,14 @@ app.use((err: Error & { status?: number; type?: string }, _req: express.Request,
 async function start() {
   try {
     await verifyDbConnection();
-    console.log('Database connected');
+    logger.info('Database connected');
     await runMigrations();
 
     app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+      logger.info({ port: PORT }, `Server running on http://localhost:${PORT}`);
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.fatal({ err: error }, 'Failed to start server');
     process.exit(1);
   }
 }

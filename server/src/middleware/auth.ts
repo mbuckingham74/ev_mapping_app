@@ -2,6 +2,14 @@ import type { NextFunction, Request, Response } from 'express';
 import { pool } from '../db.js';
 import { config } from '../config.js';
 import { getCookie, hashSessionToken } from '../auth/session.js';
+import { createLogger } from '../logger.js';
+
+const fallbackLog = createLogger('auth-middleware');
+
+// Use request-bound logger (with correlation ID) when available, fall back to module logger
+function getLog(req: Request) {
+  return req.log ?? fallbackLog;
+}
 
 type SessionLookupRow = {
   user_id: number;
@@ -37,7 +45,7 @@ export async function attachAuth(req: Request, _res: Response, next: NextFunctio
       // ignore last-seen update failures
     });
   } catch (error) {
-    console.error('Auth lookup failed:', error);
+    getLog(req).error({ err: error }, 'Auth lookup failed');
   }
 
   return next();

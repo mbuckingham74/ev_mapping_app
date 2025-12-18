@@ -13,6 +13,8 @@ export type UserPreferences = {
   default_corridor_miles: number;
   default_preference: 'fastest' | 'charger_optimized';
   max_detour_factor: number;
+  max_charging_speed_kw: number | null;
+  connector_type: 'CCS' | 'CHADEMO' | 'NACS' | null;
   created_at: string;
   updated_at: string;
 };
@@ -21,4 +23,3 @@ export type MeResponse = {
   user: User | null;
   preferences: UserPreferences | null;
 };
-

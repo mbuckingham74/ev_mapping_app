@@ -51,6 +51,8 @@ type UserRow = {
   password_hash: string;
 };
 
+type ConnectorType = 'CCS' | 'CHADEMO' | 'NACS';
+
 type PreferencesRow = {
   user_id: number;
   vehicle_name: string | null;
@@ -61,6 +63,8 @@ type PreferencesRow = {
   default_corridor_miles: number;
   default_preference: 'fastest' | 'charger_optimized';
   max_detour_factor: number;
+  max_charging_speed_kw: number | null;
+  connector_type: ConnectorType | null;
   created_at: string;
   updated_at: string;
 };
@@ -194,6 +198,8 @@ router.patch('/preferences', requireAuth, async (req, res) => {
     const rawDefaultCorridorMiles = hasOwn(body, 'defaultCorridorMiles') ? body.defaultCorridorMiles : hasOwn(body, 'default_corridor_miles') ? body.default_corridor_miles : undefined;
     const rawDefaultPreference = hasOwn(body, 'defaultPreference') ? body.defaultPreference : hasOwn(body, 'default_preference') ? body.default_preference : undefined;
     const rawMaxDetourFactor = hasOwn(body, 'maxDetourFactor') ? body.maxDetourFactor : hasOwn(body, 'max_detour_factor') ? body.max_detour_factor : undefined;
+    const rawMaxChargingSpeedKw = hasOwn(body, 'maxChargingSpeedKw') ? body.maxChargingSpeedKw : hasOwn(body, 'max_charging_speed_kw') ? body.max_charging_speed_kw : undefined;
+    const rawConnectorType = hasOwn(body, 'connectorType') ? body.connectorType : hasOwn(body, 'connector_type') ? body.connector_type : undefined;
 
     const next: Omit<PreferencesRow, 'created_at' | 'updated_at'> = {
       user_id: userId,
@@ -205,6 +211,8 @@ router.patch('/preferences', requireAuth, async (req, res) => {
       default_corridor_miles: existing.default_corridor_miles,
       default_preference: existing.default_preference,
       max_detour_factor: existing.max_detour_factor,
+      max_charging_speed_kw: existing.max_charging_speed_kw,
+      connector_type: existing.connector_type,
     };
 
     if (hasOwn(body, 'vehicleName') || hasOwn(body, 'vehicle_name')) {
@@ -296,6 +304,32 @@ router.patch('/preferences', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'maxDetourFactor cannot be null' });
     }
 
+    if (rawMaxChargingSpeedKw === null) {
+      next.max_charging_speed_kw = null;
+    } else {
+      const maxChargingSpeedKw = ensureNumber(rawMaxChargingSpeedKw);
+      if (maxChargingSpeedKw !== null) {
+        const rounded = Math.round(maxChargingSpeedKw);
+        if (rounded < 0 || rounded > 1000) {
+          return res.status(400).json({ error: 'maxChargingSpeedKw must be between 0 and 1000' });
+        }
+        next.max_charging_speed_kw = rounded;
+      }
+    }
+
+    if (rawConnectorType === null) {
+      next.connector_type = null;
+    } else {
+      const connectorTypeRaw = ensureString(rawConnectorType);
+      if (connectorTypeRaw) {
+        const normalized = connectorTypeRaw.trim().toUpperCase();
+        if (normalized !== 'CCS' && normalized !== 'CHADEMO' && normalized !== 'NACS') {
+          return res.status(400).json({ error: 'connectorType must be "CCS", "CHADEMO", "NACS", or null' });
+        }
+        next.connector_type = normalized as ConnectorType;
+      }
+    }
+
     const updated = await pool.query<PreferencesRow>(
       `
         INSERT INTO user_preferences (
@@ -308,9 +342,11 @@ router.patch('/preferences', requireAuth, async (req, res) => {
           default_corridor_miles,
           default_preference,
           max_detour_factor,
+          max_charging_speed_kw,
+          connector_type,
           updated_at
         )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, NOW())
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, NOW())
         ON CONFLICT (user_id) DO UPDATE SET
           vehicle_name = EXCLUDED.vehicle_name,
           range_miles = EXCLUDED.range_miles,
@@ -320,6 +356,8 @@ router.patch('/preferences', requireAuth, async (req, res) => {
           default_corridor_miles = EXCLUDED.default_corridor_miles,
           default_preference = EXCLUDED.default_preference,
           max_detour_factor = EXCLUDED.max_detour_factor,
+          max_charging_speed_kw = EXCLUDED.max_charging_speed_kw,
+          connector_type = EXCLUDED.connector_type,
           updated_at = NOW()
         RETURNING *
       `,
@@ -333,6 +371,8 @@ router.patch('/preferences', requireAuth, async (req, res) => {
         next.default_corridor_miles,
         next.default_preference,
         next.max_detour_factor,
+        next.max_charging_speed_kw,
+        next.connector_type,
       ]
     );
 

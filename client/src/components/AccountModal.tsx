@@ -16,6 +16,8 @@ type Props = {
     defaultCorridorMiles?: number;
     defaultPreference?: 'fastest' | 'charger_optimized';
     maxDetourFactor?: number;
+    maxChargingSpeedKw?: number | null;
+    connectorType?: 'CCS' | 'CHADEMO' | 'NACS' | null;
   }) => Promise<void>;
 };
 
@@ -24,6 +26,8 @@ export default function AccountModal({ open, user, preferences, onClose, onLogou
   const [rangeMiles, setRangeMiles] = useState<number>(210);
   const [efficiencyMiPerKwh, setEfficiencyMiPerKwh] = useState<string>('');
   const [batteryKwh, setBatteryKwh] = useState<string>('');
+  const [maxChargingSpeedKw, setMaxChargingSpeedKw] = useState<string>('');
+  const [connectorType, setConnectorType] = useState<'ANY' | 'CCS' | 'CHADEMO' | 'NACS'>('ANY');
   const [minArrivalPercent, setMinArrivalPercent] = useState<number>(10);
   const [defaultCorridorMiles, setDefaultCorridorMiles] = useState<number>(30);
   const [defaultPreference, setDefaultPreference] = useState<'fastest' | 'charger_optimized'>('charger_optimized');
@@ -48,6 +52,8 @@ export default function AccountModal({ open, user, preferences, onClose, onLogou
     setRangeMiles(preferences.range_miles ?? 210);
     setEfficiencyMiPerKwh(preferences.efficiency_mi_per_kwh === null ? '' : String(preferences.efficiency_mi_per_kwh));
     setBatteryKwh(preferences.battery_kwh === null ? '' : String(preferences.battery_kwh));
+    setMaxChargingSpeedKw(preferences.max_charging_speed_kw === null ? '' : String(preferences.max_charging_speed_kw));
+    setConnectorType(preferences.connector_type ?? 'ANY');
     setMinArrivalPercent(preferences.min_arrival_percent ?? 10);
     setDefaultCorridorMiles(preferences.default_corridor_miles ?? 30);
     setDefaultPreference(preferences.default_preference ?? 'charger_optimized');
@@ -85,6 +91,11 @@ export default function AccountModal({ open, user, preferences, onClose, onLogou
 
       const battery = batteryKwh.trim() ? Number.parseFloat(batteryKwh.trim()) : null;
       patch.batteryKwh = Number.isFinite(battery ?? NaN) ? battery : null;
+
+      const maxSpeed = maxChargingSpeedKw.trim() ? Number.parseFloat(maxChargingSpeedKw.trim()) : null;
+      patch.maxChargingSpeedKw = Number.isFinite(maxSpeed ?? NaN) ? maxSpeed : null;
+
+      patch.connectorType = connectorType === 'ANY' ? null : connectorType;
 
       await onSavePreferences(patch);
       setSuccess(true);
@@ -206,6 +217,34 @@ export default function AccountModal({ open, user, preferences, onClose, onLogou
               placeholder="optional"
               inputMode="decimal"
             />
+          </label>
+
+          <label className="block">
+            <div className="text-[11px] text-slate-300">Max charging speed (kW)</div>
+            <input
+              type="number"
+              value={maxChargingSpeedKw}
+              onChange={(e) => setMaxChargingSpeedKw(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-sky-500"
+              placeholder="optional"
+              inputMode="decimal"
+              min={0}
+              max={1000}
+            />
+          </label>
+
+          <label className="block">
+            <div className="text-[11px] text-slate-300">Connector type</div>
+            <select
+              value={connectorType}
+              onChange={(e) => setConnectorType(e.target.value === 'CCS' ? 'CCS' : e.target.value === 'CHADEMO' ? 'CHADEMO' : e.target.value === 'NACS' ? 'NACS' : 'ANY')}
+              className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-sky-500"
+            >
+              <option value="ANY">Any</option>
+              <option value="CCS">CCS</option>
+              <option value="CHADEMO">CHAdeMO</option>
+              <option value="NACS">NACS (Tesla)</option>
+            </select>
           </label>
 
           <label className="block">

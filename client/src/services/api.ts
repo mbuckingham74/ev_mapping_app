@@ -226,6 +226,8 @@ export async function updatePreferences(patch: Partial<{
   defaultCorridorMiles: number;
   defaultPreference: 'fastest' | 'charger_optimized';
   maxDetourFactor: number;
+  maxChargingSpeedKw: number | null;
+  connectorType: 'CCS' | 'CHADEMO' | 'NACS' | null;
 }>): Promise<UserPreferences> {
   const response = await fetch(`${API_BASE}/auth/preferences`, {
     method: 'PATCH',

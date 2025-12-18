@@ -64,6 +64,7 @@ type RoutePlanParams = {
   end: string;
   waypoints: string[];
   corridorMiles: number;
+  autoCorridor: boolean;
   preference: 'fastest' | 'charger_optimized';
 };
 
@@ -80,6 +81,7 @@ function buildSearchFromPlanParams(params: RoutePlanParams): string {
     if (wp.trim()) qs.append('wp', wp);
   }
   qs.set('corridor', String(params.corridorMiles));
+  if (params.autoCorridor) qs.set('auto', '1');
   qs.set('pref', params.preference);
   const query = qs.toString();
   return query ? `?${query}` : '';
@@ -100,6 +102,7 @@ function parsePlanParamsFromSearch(search: string): RoutePlanParams | null {
   const waypoints = qs.getAll('wp').map((w) => w.trim()).filter(Boolean);
   const corridorRaw = qs.get('corridor');
   const corridorMiles = corridorRaw ? Number.parseFloat(corridorRaw) : 30;
+  const autoCorridor = qs.get('auto') === '1';
   const preferenceRaw = qs.get('pref');
   const preference = preferenceRaw === 'charger_optimized' ? 'charger_optimized' : 'fastest';
 
@@ -108,6 +111,7 @@ function parsePlanParamsFromSearch(search: string): RoutePlanParams | null {
     end,
     waypoints,
     corridorMiles: Number.isFinite(corridorMiles) ? Math.max(0, corridorMiles) : 30,
+    autoCorridor,
     preference,
   };
 }
@@ -547,6 +551,7 @@ function App() {
         rangeMiles: prefs?.range_miles,
         minArrivalPercent: prefs?.min_arrival_percent,
         maxDetourFactor: prefs?.max_detour_factor,
+        autoCorridor: params.autoCorridor,
       });
       setRoute(data);
       return data;
@@ -577,6 +582,7 @@ function App() {
       end: saved.end_query,
       waypoints: saved.waypoints ?? [],
       corridorMiles: saved.corridor_miles ?? 30,
+      autoCorridor: false,
       preference: saved.preference ?? 'fastest',
     };
     setPlannerInitialParams(params);

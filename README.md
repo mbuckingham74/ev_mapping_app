@@ -21,6 +21,7 @@
 - **Smart Route Planning** — Enter cities or full addresses with optional waypoints
 - **DC Charger Optimized Mode** — Finds routes that maximize charging options, even if slightly longer
 - **Corridor-Based Station Search** — PostGIS-powered queries find stations within X miles of your route
+- **Auto Corridor (Min Clutter)** — Starts narrow and widens only if needed to keep max gaps within your range
 - **Truck Stops Along Route** — Plots truck stop POIs within the corridor (orange markers) with brand filtering
 - **Auto-Expanding Corridors** — Automatically widens search when needed to ensure viable charging gaps
 - **Elevation Metrics** — See total climb/descent plus per-leg elevation changes between stations

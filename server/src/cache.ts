@@ -39,6 +39,7 @@ export function makeRouteResponseCacheKey(options: {
   end: string;
   waypoints: string[];
   corridorMiles: number;
+  autoCorridor: boolean;
   includeStations: boolean;
   preference: 'fastest' | 'charger_optimized';
   rangeMiles: number;
@@ -49,8 +50,9 @@ export function makeRouteResponseCacheKey(options: {
   const detour = (Math.round(options.maxDetourFactor * 1000) / 1000).toFixed(3);
   const queries = [options.start, ...options.waypoints, options.end].map(normalizeQueryText);
   const payload = [
-    'route:v7',
+    'route:v8',
     `pref=${options.preference}`,
+    `autoCorr=${options.autoCorridor ? 1 : 0}`,
     `stations=${options.includeStations ? 1 : 0}`,
     `corr=${corridor}`,
     `range=${Math.round(options.rangeMiles)}`,

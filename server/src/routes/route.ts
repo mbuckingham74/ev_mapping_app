@@ -353,6 +353,8 @@ function computeTargetMaxGapMiles(rangeMiles: number, minArrivalPercent: number)
   return Math.max(0, range * (1 - pct / 100));
 }
 
+const AUTO_CORRIDOR_MIN_MILES = 5;
+
 function corridorExpansionCandidatesMiles(requestedCorridorMiles: number): number[] {
   const base = Math.max(0, requestedCorridorMiles);
   const candidates = [5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80]
@@ -1496,6 +1498,8 @@ router.post('/', async (req, res) => {
     const rawWaypoints = (req.body as { waypoints?: unknown } | undefined)?.waypoints;
     const rawCorridorMiles = (req.body as { corridorMiles?: unknown; corridor_miles?: unknown } | undefined)?.corridorMiles
       ?? (req.body as { corridorMiles?: unknown; corridor_miles?: unknown } | undefined)?.corridor_miles;
+    const autoCorridorRaw = (req.body as { autoCorridor?: unknown; auto_corridor?: unknown } | undefined)?.autoCorridor
+      ?? (req.body as { autoCorridor?: unknown; auto_corridor?: unknown } | undefined)?.auto_corridor;
     const includeStationsRaw = (req.body as { includeStations?: unknown } | undefined)?.includeStations;
     const preferenceRaw = ensureString((req.body as { preference?: unknown } | undefined)?.preference);
     const rawRangeMiles = (req.body as { rangeMiles?: unknown; range_miles?: unknown } | undefined)?.rangeMiles
@@ -1533,7 +1537,9 @@ router.post('/', async (req, res) => {
 
     const resolvedPoints = points as GeocodedPoint[];
     const coords = resolvedPoints.map((p) => [p.lng, p.lat] as [number, number]);
-    const corridorMiles = Math.max(0, ensureNumber(rawCorridorMiles) ?? 15);
+    const autoCorridor = autoCorridorRaw === true || autoCorridorRaw === 'true';
+    const requestedCorridorMiles = Math.max(0, ensureNumber(rawCorridorMiles) ?? 15);
+    const corridorMiles = autoCorridor ? AUTO_CORRIDOR_MIN_MILES : requestedCorridorMiles;
     const includeStations = includeStationsRaw === undefined ? true : includeStationsRaw !== false;
     const requestedPreference = preferenceRaw === 'charger_optimized' ? 'charger_optimized' : 'fastest';
     let preference: 'fastest' | 'charger_optimized' = requestedPreference;
@@ -1577,6 +1583,7 @@ router.post('/', async (req, res) => {
         end,
         waypoints,
         corridorMiles,
+        autoCorridor,
         includeStations,
         preference: requestedPreference,
         rangeMiles,
@@ -1688,11 +1695,11 @@ router.post('/', async (req, res) => {
 
     if (
       includeStations
-      && requestedPreference === 'charger_optimized'
       && Array.isArray(chosenStations)
       && typeof maxGapMiles === 'number'
       && Number.isFinite(maxGapMiles)
       && maxGapMiles > targetMaxGapMiles
+      && (requestedPreference === 'charger_optimized' || autoCorridor)
     ) {
       const candidateCorridors = corridorExpansionCandidatesMiles(corridorMiles);
       type CorridorCandidate = { corridorMiles: number; stations: StationAlongRoute[]; maxGapMiles: number };
@@ -1727,10 +1734,14 @@ router.post('/', async (req, res) => {
         corridorMilesUsed = picked.corridorMiles;
         chosenStations = picked.stations;
         maxGapMiles = picked.maxGapMiles;
-        preference = 'charger_optimized';
+        if (requestedPreference === 'charger_optimized') {
+          preference = 'charger_optimized';
+        }
         warning = [
           warning,
-          `Expanded corridor to ${Math.round(corridorMilesUsed)} mi (was ${Math.round(corridorMiles)} mi) to reduce max gap.`,
+          autoCorridor
+            ? `Auto corridor expanded to ${Math.round(corridorMilesUsed)} mi (started at ${Math.round(corridorMiles)} mi) to reduce max gap.`
+            : `Expanded corridor to ${Math.round(corridorMilesUsed)} mi (was ${Math.round(corridorMiles)} mi) to reduce max gap.`,
         ].filter(Boolean).join(' ');
       }
     }
@@ -1779,6 +1790,7 @@ router.post('/', async (req, res) => {
           end,
           waypoints,
           corridorMiles,
+          autoCorridor,
           includeStations,
           preference: requestedPreference,
           rangeMiles,

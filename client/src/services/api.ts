@@ -33,7 +33,7 @@ export async function fetchRoute(
   waypoints: string[] = [],
   corridorMiles: number = 15,
   preference: 'fastest' | 'charger_optimized' = 'fastest',
-  options?: { rangeMiles?: number; maxDetourFactor?: number; minArrivalPercent?: number }
+  options?: { rangeMiles?: number; maxDetourFactor?: number; minArrivalPercent?: number; autoCorridor?: boolean }
 ): Promise<RouteResponse> {
   const response = await fetch(`${API_BASE}/route`, {
     method: 'POST',
@@ -46,6 +46,7 @@ export async function fetchRoute(
       end,
       waypoints,
       corridorMiles,
+      autoCorridor: options?.autoCorridor,
       includeStations: true,
       preference,
       rangeMiles: options?.rangeMiles,

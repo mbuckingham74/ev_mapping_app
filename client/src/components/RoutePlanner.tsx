@@ -24,6 +24,7 @@ type Props = {
     end: string;
     waypoints: string[];
     corridorMiles: number;
+    autoCorridor: boolean;
     preference: 'fastest' | 'charger_optimized';
   } | null;
   savedRoutes?: SavedRoute[];
@@ -34,6 +35,7 @@ type Props = {
     end: string;
     waypoints: string[];
     corridorMiles: number;
+    autoCorridor: boolean;
     preference: 'fastest' | 'charger_optimized';
   }) => Promise<void>;
   onClearRoute: () => void;
@@ -44,6 +46,7 @@ type Props = {
     end: string;
     waypoints: string[];
     corridorMiles: number;
+    autoCorridor: boolean;
     preference: 'fastest' | 'charger_optimized';
   }) => Promise<void>;
   onLoadSavedRoute?: (id: number) => Promise<void>;
@@ -126,10 +129,14 @@ export default function RoutePlanner({
   onSaveRoute,
   onLoadSavedRoute,
 }: Props) {
+  const initialAutoCorridor = initialParams?.autoCorridor ?? true;
   const [start, setStart] = useState(initialParams?.start ?? '');
   const [end, setEnd] = useState(initialParams?.end ?? '');
   const [waypoints, setWaypoints] = useState<string[]>(initialParams?.waypoints ?? []);
-  const [corridorMiles, setCorridorMiles] = useState<number>(initialParams?.corridorMiles ?? defaultCorridorMiles ?? 30);
+  const [autoCorridor, setAutoCorridor] = useState<boolean>(initialAutoCorridor);
+  const [corridorMiles, setCorridorMiles] = useState<number>(() => (
+    initialAutoCorridor ? 5 : (initialParams?.corridorMiles ?? defaultCorridorMiles ?? 30)
+  ));
   const [preference, setPreference] = useState<'fastest' | 'charger_optimized'>(initialParams?.preference ?? defaultPreference ?? 'charger_optimized');
   const [saveName, setSaveName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -181,13 +188,13 @@ export default function RoutePlanner({
   useEffect(() => {
     if (initialParams) return;
     if (start.trim() || end.trim()) return;
-    if (typeof defaultCorridorMiles === 'number' && Number.isFinite(defaultCorridorMiles)) {
+    if (!autoCorridor && typeof defaultCorridorMiles === 'number' && Number.isFinite(defaultCorridorMiles)) {
       setCorridorMiles(Math.max(0, defaultCorridorMiles));
     }
     if (defaultPreference === 'fastest' || defaultPreference === 'charger_optimized') {
       setPreference(defaultPreference);
     }
-  }, [defaultCorridorMiles, defaultPreference, end, initialParams, start]);
+  }, [autoCorridor, defaultCorridorMiles, defaultPreference, end, initialParams, start]);
 
   useEffect(() => {
     const used = route?.corridor_miles;
@@ -210,6 +217,7 @@ export default function RoutePlanner({
       end: end.trim(),
       waypoints: waypoints.map((w) => w.trim()).filter(Boolean),
       corridorMiles,
+      autoCorridor,
       preference,
     });
   }
@@ -227,6 +235,7 @@ export default function RoutePlanner({
           next.append('wp', wp);
         }
         next.set('corridor', String(corridorMiles));
+        if (autoCorridor) next.set('auto', '1');
         next.set('pref', preference);
         url = `${window.location.origin}${window.location.pathname}?${next.toString()}`;
       }
@@ -254,6 +263,7 @@ export default function RoutePlanner({
         end: end.trim(),
         waypoints: waypoints.map((w) => w.trim()).filter(Boolean),
         corridorMiles,
+        autoCorridor,
         preference,
       });
       setSaveSuccess(true);
@@ -380,14 +390,30 @@ export default function RoutePlanner({
         </div>
 
         <div>
-          <label className="block text-xs text-slate-300 mb-1" htmlFor="route-corridor">
-            Corridor width
-          </label>
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <label className="block text-xs text-slate-300" htmlFor="route-corridor">
+              Corridor width
+            </label>
+            <label className="inline-flex items-center gap-2 text-[11px] text-slate-300">
+              <input
+                type="checkbox"
+                checked={autoCorridor}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setAutoCorridor(checked);
+                  if (checked) setCorridorMiles(5);
+                }}
+                className="h-3.5 w-3.5 accent-sky-500"
+              />
+              Auto
+            </label>
+          </div>
           <select
             id="route-corridor"
             value={corridorMiles}
             onChange={(e) => setCorridorMiles(Number.parseInt(e.target.value, 10))}
-            className="w-full rounded-md bg-slate-800 border border-slate-700 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+            disabled={autoCorridor}
+            className="w-full rounded-md bg-slate-800 border border-slate-700 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {[5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80].map((value) => (
               <option key={value} value={value}>
@@ -396,7 +422,9 @@ export default function RoutePlanner({
             ))}
           </select>
           <p className="mt-1 text-[11px] text-slate-400">
-            Includes EA stations within this distance of the route.
+            {autoCorridor
+              ? 'Starts narrow and widens only if needed to keep max gaps within your range.'
+              : 'Includes EA stations within this distance of the route.'}
           </p>
         </div>
 

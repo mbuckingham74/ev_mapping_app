@@ -110,6 +110,8 @@ export default function AccountModal({ open, user, preferences, onClose, onLogou
     }
   }
 
+  const maxDetourPercent = Math.max(0, Math.round((maxDetourFactor - 1) * 100));
+
   return (
     <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
       <button
@@ -231,7 +233,21 @@ export default function AccountModal({ open, user, preferences, onClose, onLogou
           </label>
 
           <label className="block sm:col-span-2">
-            <div className="text-[11px] text-slate-300">Max detour factor</div>
+            <div className="flex items-center gap-2 text-[11px] text-slate-300">
+              <span>Max detour factor</span>
+              <span className="relative inline-flex group">
+                <button
+                  type="button"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-600 text-[10px] font-semibold leading-none text-slate-200 hover:border-slate-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  aria-label="About max detour factor"
+                >
+                  i
+                </button>
+                <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-72 -translate-x-1/2 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-200 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                  Caps DC-optimized routes to at most {maxDetourPercent}% longer than the fastest route (distance). Example: 1.25 = 25% longer.
+                </span>
+              </span>
+            </div>
             <input
               type="number"
               value={maxDetourFactor}

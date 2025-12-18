@@ -51,7 +51,7 @@ type UserRow = {
   password_hash: string;
 };
 
-type ConnectorType = 'CCS' | 'CHADEMO' | 'NACS';
+type ConnectorType = 'CCS' | 'CHADEMO' | 'NACS' | 'J1772';
 
 type PreferencesRow = {
   user_id: number;
@@ -323,8 +323,8 @@ router.patch('/preferences', requireAuth, async (req, res) => {
       const connectorTypeRaw = ensureString(rawConnectorType);
       if (connectorTypeRaw) {
         const normalized = connectorTypeRaw.trim().toUpperCase();
-        if (normalized !== 'CCS' && normalized !== 'CHADEMO' && normalized !== 'NACS') {
-          return res.status(400).json({ error: 'connectorType must be "CCS", "CHADEMO", "NACS", or null' });
+        if (normalized !== 'CCS' && normalized !== 'CHADEMO' && normalized !== 'NACS' && normalized !== 'J1772') {
+          return res.status(400).json({ error: 'connectorType must be "CCS", "CHADEMO", "NACS", "J1772", or null' });
         }
         next.connector_type = normalized as ConnectorType;
       }

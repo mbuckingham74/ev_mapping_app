@@ -17,9 +17,20 @@ type Props = {
     defaultPreference?: 'fastest' | 'charger_optimized';
     maxDetourFactor?: number;
     maxChargingSpeedKw?: number | null;
-    connectorType?: 'CCS' | 'CHADEMO' | 'NACS' | null;
+    connectorType?: 'CCS' | 'CHADEMO' | 'NACS' | 'J1772' | null;
   }) => Promise<void>;
 };
+
+const connectorTypeOptions = ['ANY', 'NACS', 'J1772', 'CCS', 'CHADEMO'] as const;
+type ConnectorTypeOption = (typeof connectorTypeOptions)[number];
+
+function asConnectorTypeOption(value: string): ConnectorTypeOption {
+  if (value === 'NACS') return 'NACS';
+  if (value === 'J1772') return 'J1772';
+  if (value === 'CCS') return 'CCS';
+  if (value === 'CHADEMO') return 'CHADEMO';
+  return 'ANY';
+}
 
 export default function AccountModal({ open, user, preferences, onClose, onLogout, onSavePreferences }: Props) {
   const [vehicleName, setVehicleName] = useState('');
@@ -27,7 +38,7 @@ export default function AccountModal({ open, user, preferences, onClose, onLogou
   const [efficiencyMiPerKwh, setEfficiencyMiPerKwh] = useState<string>('');
   const [batteryKwh, setBatteryKwh] = useState<string>('');
   const [maxChargingSpeedKw, setMaxChargingSpeedKw] = useState<string>('');
-  const [connectorType, setConnectorType] = useState<'ANY' | 'CCS' | 'CHADEMO' | 'NACS'>('ANY');
+  const [connectorType, setConnectorType] = useState<ConnectorTypeOption>('ANY');
   const [minArrivalPercent, setMinArrivalPercent] = useState<number>(10);
   const [defaultCorridorMiles, setDefaultCorridorMiles] = useState<number>(30);
   const [defaultPreference, setDefaultPreference] = useState<'fastest' | 'charger_optimized'>('charger_optimized');
@@ -53,7 +64,7 @@ export default function AccountModal({ open, user, preferences, onClose, onLogou
     setEfficiencyMiPerKwh(preferences.efficiency_mi_per_kwh === null ? '' : String(preferences.efficiency_mi_per_kwh));
     setBatteryKwh(preferences.battery_kwh === null ? '' : String(preferences.battery_kwh));
     setMaxChargingSpeedKw(preferences.max_charging_speed_kw === null ? '' : String(preferences.max_charging_speed_kw));
-    setConnectorType(preferences.connector_type ?? 'ANY');
+    setConnectorType(preferences.connector_type ? asConnectorTypeOption(preferences.connector_type) : 'ANY');
     setMinArrivalPercent(preferences.min_arrival_percent ?? 10);
     setDefaultCorridorMiles(preferences.default_corridor_miles ?? 30);
     setDefaultPreference(preferences.default_preference ?? 'charger_optimized');
@@ -237,13 +248,14 @@ export default function AccountModal({ open, user, preferences, onClose, onLogou
             <div className="text-[11px] text-slate-300">Connector type</div>
             <select
               value={connectorType}
-              onChange={(e) => setConnectorType(e.target.value === 'CCS' ? 'CCS' : e.target.value === 'CHADEMO' ? 'CHADEMO' : e.target.value === 'NACS' ? 'NACS' : 'ANY')}
+              onChange={(e) => setConnectorType(asConnectorTypeOption(e.target.value))}
               className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-sky-500"
             >
               <option value="ANY">Any</option>
-              <option value="CCS">CCS</option>
+              <option value="NACS">NACS (J3400)</option>
+              <option value="J1772">J1772</option>
+              <option value="CCS">CCS1</option>
               <option value="CHADEMO">CHAdeMO</option>
-              <option value="NACS">NACS (Tesla)</option>
             </select>
           </label>
 

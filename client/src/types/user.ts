@@ -14,7 +14,7 @@ export type UserPreferences = {
   default_preference: 'fastest' | 'charger_optimized';
   max_detour_factor: number;
   max_charging_speed_kw: number | null;
-  connector_type: 'CCS' | 'CHADEMO' | 'NACS' | null;
+  connector_type: 'CCS' | 'CHADEMO' | 'NACS' | 'J1772' | null;
   created_at: string;
   updated_at: string;
 };

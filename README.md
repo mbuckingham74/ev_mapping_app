@@ -1,99 +1,180 @@
-# EV
+# EV Route Planner
 
-Web app for planning routes and viewing Electrify America DC fast-charging stations on a map, backed by Postgres + PostGIS.
+> Plan your EV road trips with confidence. Find Electrify America charging stations along your route with intelligent gap analysis and elevation-aware metrics.
 
-**Live:** https://ev.tachyonfuture.com
+[![Live Demo](https://img.shields.io/badge/demo-ev.tachyonfuture.com-blue?style=flat-square)](https://ev.tachyonfuture.com)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-6-646cff?style=flat-square&logo=vite&logoColor=white)](https://vite.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-06b6d4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Node.js](https://img.shields.io/badge/Node.js-22-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Express](https://img.shields.io/badge/Express-5-000000?style=flat-square&logo=express&logoColor=white)](https://expressjs.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16_+_PostGIS-4169e1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Leaflet](https://img.shields.io/badge/Leaflet-1.9-199900?style=flat-square&logo=leaflet&logoColor=white)](https://leafletjs.com/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ed?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+
+---
 
 ## Features
 
-- Route planning (start/end + optional waypoints)
-- “DC charger optimized” mode (may choose a longer route to include more stations)
-- Accurate stations-along-route corridor filtering via PostGIS (plus max-gap calculation)
-- Elevation metrics (route total gain/loss + per-leg gain/loss between stations)
-- Auto-expands corridor (when needed) to find EA-viable routes within your range
-- DB-backed caching for ORS geocoding/directions and full route responses
-- Station ranking (A–D tiers) for stations along your route
-- Accounts: save routes + store vehicle preferences (range, corridor, detour factor, etc.)
-- Risk alerts when max-gap exceeds your range or would arrive below your min arrival %
-- Share links via URL query params (start/end/wp/corridor/pref)
+- **Smart Route Planning** — Enter cities or full addresses with optional waypoints
+- **DC Charger Optimized Mode** — Finds routes that maximize charging options, even if slightly longer
+- **Corridor-Based Station Search** — PostGIS-powered queries find stations within X miles of your route
+- **Auto-Expanding Corridors** — Automatically widens search when needed to ensure viable charging gaps
+- **Elevation Metrics** — See total climb/descent plus per-leg elevation changes between stations
+- **Station Ranking** — A–D tier ratings based on charger power, stall count, and proximity
+- **Risk Alerts** — Warnings when gaps exceed your range or you'd arrive below minimum charge
+- **User Accounts** — Save routes and vehicle preferences (range, efficiency, min arrival %)
+- **Shareable Links** — Generate URLs with route parameters for easy sharing
 
-## Repo Layout
+## Tech Stack
 
-- `client/` — React + TypeScript + Vite frontend (Leaflet map)
-- `server/` — Node.js + Express + TypeScript backend API
-- `docker-compose.yml` — Production compose (expects external `npm_network`)
-- `docker-compose.dev.yml` — Local dev Postgres/PostGIS
+| Layer | Technology |
+|-------|------------|
+| **Frontend** | React 19, TypeScript, Vite, Tailwind CSS v4, Leaflet |
+| **Backend** | Node.js 22, Express 5, TypeScript |
+| **Database** | PostgreSQL 16 + PostGIS |
+| **Infrastructure** | Docker Compose, Nginx Proxy Manager |
 
-## Local Development
+## Project Structure
+
+```
+ev-app/
+├── client/                 # React frontend
+│   ├── src/
+│   │   ├── components/     # UI components (RoutePlanner, etc.)
+│   │   ├── services/       # API client
+│   │   └── types/          # TypeScript types
+│   └── Dockerfile
+├── server/                 # Express backend
+│   ├── src/
+│   │   ├── routes/         # API endpoints
+│   │   └── migrations/     # Database migrations
+│   └── Dockerfile
+└── docker-compose.yml      # Production deployment
+```
+
+## Getting Started
 
 ### Prerequisites
 
 - Node.js 22+
-- Docker (for local Postgres/PostGIS)
+- Docker & Docker Compose
 
-### Setup
+### Installation
 
 ```bash
+# Clone the repo
+git clone https://github.com/mbuckingham74/ev_mapping_app.git
+cd ev_mapping_app
+
+# Install dependencies
 npm install
+
+# Set up environment
 cp .env.example .env
 ```
 
-Update `.env` with at least:
+Edit `.env` with your API keys:
 
-- `DB_PASSWORD`
-- `OPENCHARMAP_API_KEY` (required to fetch stations)
-- `OPENROUTESERVICE_API_KEY` (required for route planning)
+| Variable | Description |
+|----------|-------------|
+| `DB_PASSWORD` | PostgreSQL password |
+| `OPENCHARMAP_API_KEY` | [OpenChargeMap](https://openchargemap.org/site/develop/api) API key |
+| `OPENROUTESERVICE_API_KEY` | [OpenRouteService](https://openrouteservice.org/) API key |
 
-Start Postgres:
+### Run Locally
 
 ```bash
+# Start PostgreSQL/PostGIS
 npm run docker:dev:up
-```
 
-Run the dev servers:
-
-```bash
+# Start dev servers (frontend + backend)
 npm run dev
 ```
 
-- Frontend: `http://localhost:5173`
-- Backend: `http://localhost:3001`
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:3001
 
-### Import/Refresh Station Data
+### Import Station Data
 
 ```bash
 npm run fetch:stations
 ```
 
-### Auth (optional)
+This fetches ~1,100 Electrify America stations from OpenChargeMap.
 
-Accounts use a secure, httpOnly session cookie stored by the backend.
+## API Overview
 
-- Optional config in `.env`: `SESSION_COOKIE_NAME`, `SESSION_TTL_DAYS`
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/route` | Plan a route with stations along the corridor |
+| `GET /api/stations` | List all stations (optionally filter by state) |
+| `GET /api/stations/near/:lat/:lng` | Find stations near a location |
+| `POST /api/auth/signup` | Create account |
+| `POST /api/auth/login` | Sign in |
+| `GET /api/saved-routes` | List saved routes |
 
-### Min Arrival %
+See the [API documentation](.ev_mapping_app.md) for full details.
 
-Vehicle preference `min_arrival_percent` is used by the charger-optimizer and risk alerts.
+## How It Works
 
-- Safe max-gap target: `range_miles * (1 - min_arrival_percent/100)`
-- The client sends `minArrivalPercent` to `POST /api/route` (and if omitted, the backend will use the signed-in user’s saved preference when available).
+1. **Geocoding** — Converts start/end locations to coordinates via OpenRouteService
+2. **Route Calculation** — Gets driving directions with elevation data
+3. **Station Search** — PostGIS corridor query finds EA stations within X miles of the route polyline
+4. **Gap Analysis** — Calculates distances between stations and identifies max gaps
+5. **Optimization** — In "charger optimized" mode, may widen corridor or insert waypoints to reduce gaps
+6. **Ranking** — Scores stations by power (kW), stall count, and distance from route
 
-### Caching (optional)
+## Configuration
 
-All cache entries are stored in Postgres with TTLs.
+### Caching
 
-- `GEOCODE_CACHE_TTL_DAYS` (default `30`)
-- `DIRECTIONS_CACHE_TTL_DAYS` (default `7`)
-- `ROUTE_CACHE_TTL_SECONDS` (default `600`)
+Route calculations are cached in PostgreSQL to reduce API calls:
 
-### Station Ranking
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GEOCODE_CACHE_TTL_DAYS` | 30 | Geocoding cache lifetime |
+| `DIRECTIONS_CACHE_TTL_DAYS` | 7 | Directions cache lifetime |
+| `ROUTE_CACHE_TTL_SECONDS` | 600 | Full route response cache |
 
-When route planning returns `stations`, each station includes:
+### User Preferences
 
-- `rank_score` (0–100), `rank_tier` (`A`–`D`), and `rank` (1 = best).
+Signed-in users can save vehicle preferences:
 
-Ranking favors higher max kW, more DC stalls, and closer-to-route stations (and penalizes non-operational stations).
+- **Range** — Total vehicle range in miles
+- **Min Arrival %** — Minimum charge level when reaching a charger
+- **Corridor Width** — Default search corridor in miles
+- **Max Detour Factor** — How much longer a route can be (e.g., 1.25 = 25% longer max)
 
-## Migrations
+## Deployment
 
-The backend runs SQL migrations on startup. Migrations live in `server/migrations/`.
+The app runs on Docker Compose with three containers:
+
+```
+┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
+│    Frontend     │   │     Backend     │   │    PostgreSQL   │
+│  (nginx:alpine) │──▶│  (node:alpine)  │──▶│ (postgis:alpine)│
+│      :80        │   │     :3001       │   │     :5432       │
+└─────────────────┘   └─────────────────┘   └─────────────────┘
+```
+
+```bash
+# Build and start
+docker compose build
+docker compose up -d
+
+# View logs
+docker compose logs -f
+```
+
+## License
+
+MIT
+
+## Acknowledgments
+
+- [OpenChargeMap](https://openchargemap.org/) — Charging station data
+- [OpenRouteService](https://openrouteservice.org/) — Geocoding and routing
+- [OpenStreetMap](https://www.openstreetmap.org/) — Map tiles

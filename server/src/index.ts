@@ -12,7 +12,19 @@ import { attachAuth } from './middleware/auth.js';
 const app = express();
 const PORT = config.port;
 
-// Middleware
+// Remove Express version disclosure
+app.disable('x-powered-by');
+
+// Security headers (API-relevant only; CSP/COOP/COEP omitted as they apply to HTML documents)
+app.use((_req, res, next) => {
+  // Prevent MIME-sniffing (relevant for any response)
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  // Prevent this API from being embedded in frames
+  res.setHeader('X-Frame-Options', 'DENY');
+  next();
+});
+
+// CORS
 app.use(cors({
   origin: config.corsOrigin,
   credentials: true,

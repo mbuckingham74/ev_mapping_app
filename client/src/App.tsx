@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, ZoomControl,
 import L from 'leaflet';
 import { createSavedRoute, fetchMe, fetchRoute, fetchSavedRoute, fetchSavedRoutes, fetchStations, fetchStationCount, login, logout, signup, updatePreferences } from './services/api';
 import type { Station } from './types/station';
-import type { RouteResponse, RouteStation } from './types/route';
+import type { RouteResponse, RouteStation, TruckStopAlongRoute } from './types/route';
 import type { SavedRoute } from './types/savedRoute';
 import RoutePlanner from './components/RoutePlanner';
 import AuthModal from './components/AuthModal';
@@ -28,6 +28,28 @@ const AUTO_WAYPOINT_ICON = L.divIcon({
   iconAnchor: [14, 14],
   popupAnchor: [0, -14],
 });
+
+const TRUCK_STOP_ICON = (() => {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
+      <path d="M12.5 0C5.6 0 0 5.6 0 12.5c0 9.4 12.5 28.5 12.5 28.5S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0z" fill="#f97316" stroke="#9a3412" stroke-width="1"/>
+      <circle cx="12.5" cy="12.5" r="5" fill="#fff"/>
+    </svg>
+  `.trim();
+
+  const iconUrl = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+  return L.icon({
+    iconUrl,
+    iconRetinaUrl: iconUrl,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    tooltipAnchor: [16, -28],
+    shadowUrl: markerShadow,
+    shadowSize: [41, 41],
+    shadowAnchor: [12, 41],
+  });
+})();
 
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795]; // Center of US
 const DEFAULT_ZOOM = 4;
@@ -337,6 +359,7 @@ function App() {
   const [routeError, setRouteError] = useState<string | null>(null);
   const [mapZoom, setMapZoom] = useState<number>(DEFAULT_ZOOM);
   const [selectedStationId, setSelectedStationId] = useState<number | null>(null);
+  const [selectedTruckStopBrands, setSelectedTruckStopBrands] = useState<Set<string>>(() => new Set());
   const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
   const [savedRoutesLoading, setSavedRoutesLoading] = useState(false);
   const [savedRoutesError, setSavedRoutesError] = useState<string | null>(null);
@@ -356,6 +379,53 @@ function App() {
   const routeStations = useMemo<RouteStation[]>(() => {
     return route?.stations ?? [];
   }, [route]);
+
+  const routeTruckStops = useMemo<TruckStopAlongRoute[]>(() => {
+    return route?.truck_stops ?? [];
+  }, [route]);
+
+  const truckStopBrandCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const stop of routeTruckStops) {
+      const brand = stop.brand?.trim() ? stop.brand.trim() : 'Unknown';
+      counts.set(brand, (counts.get(brand) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([brand, count]) => ({ brand, count }))
+      .sort((a, b) => a.brand.localeCompare(b.brand));
+  }, [routeTruckStops]);
+
+  const visibleTruckStops = useMemo(() => {
+    if (!route) return [];
+    if (selectedTruckStopBrands.size === 0) return [];
+    return routeTruckStops.filter((stop) => selectedTruckStopBrands.has(stop.brand));
+  }, [route, routeTruckStops, selectedTruckStopBrands]);
+
+  useEffect(() => {
+    if (!route) {
+      setSelectedTruckStopBrands(new Set());
+      return;
+    }
+    const brands = new Set((route.truck_stops ?? []).map((s) => s.brand).filter(Boolean));
+    setSelectedTruckStopBrands(brands);
+  }, [route]);
+
+  function toggleTruckStopBrand(brand: string) {
+    setSelectedTruckStopBrands((prev) => {
+      const next = new Set(prev);
+      if (next.has(brand)) next.delete(brand);
+      else next.add(brand);
+      return next;
+    });
+  }
+
+  function setAllTruckStopBrands(selectAll: boolean) {
+    if (!selectAll) {
+      setSelectedTruckStopBrands(new Set());
+      return;
+    }
+    setSelectedTruckStopBrands(new Set(truckStopBrandCounts.map((b) => b.brand)));
+  }
 
   const autoWaypointIds = useMemo(() => {
     const ids = new Set<number>();
@@ -656,6 +726,12 @@ function App() {
             onClearRoute={handleClearRoute}
             onSelectStation={(stationId) => setSelectedStationId(stationId)}
             selectedStationId={selectedStationId}
+            truckStopBrandCounts={truckStopBrandCounts}
+            truckStopTotalCount={routeTruckStops.length}
+            truckStopVisibleCount={visibleTruckStops.length}
+            selectedTruckStopBrands={selectedTruckStopBrands}
+            onToggleTruckStopBrand={toggleTruckStopBrand}
+            onSetAllTruckStopBrands={setAllTruckStopBrands}
             isAuthenticated={Boolean(user)}
             onOpenAuth={() => setAuthModalOpen(true)}
             defaultCorridorMiles={preferences?.default_corridor_miles}
@@ -710,6 +786,39 @@ function App() {
                         {idx === 0 ? 'Start' : idx === routeStops.length - 1 ? 'End' : `Waypoint ${idx}`}
                       </h3>
                       <p className="text-slate-600 text-sm">{stop.label}</p>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+
+              {visibleTruckStops.map((stop) => (
+                <Marker
+                  key={`truck-stop-${stop.id}`}
+                  position={[stop.latitude, stop.longitude]}
+                  icon={TRUCK_STOP_ICON}
+                >
+                  <Popup>
+                    <div className="min-w-[220px]">
+                      <h3 className="font-bold text-slate-900">{stop.name}</h3>
+                      <p className="text-slate-600 text-sm">
+                        <strong>{stop.brand}</strong>
+                        {stop.city && stop.state ? ` • ${stop.city}, ${stop.state}` : ''}
+                      </p>
+                      <div className="mt-2 text-sm">
+                        {stop.address && (
+                          <p><strong>Address:</strong> {stop.address}</p>
+                        )}
+                        {stop.phone && (
+                          <p><strong>Phone:</strong> {stop.phone}</p>
+                        )}
+                        {typeof stop.truck_parking_spots === 'number' && Number.isFinite(stop.truck_parking_spots) ? (
+                          <p><strong>Truck parking:</strong> {stop.truck_parking_spots} spots</p>
+                        ) : stop.truck_parking_raw ? (
+                          <p><strong>Truck parking:</strong> {stop.truck_parking_raw}</p>
+                        ) : null}
+                        <p><strong>Off-route:</strong> {formatMiles(stop.distance_to_route_miles)} mi</p>
+                        <p><strong>Mile marker:</strong> {formatMiles(stop.distance_along_route_miles)} mi</p>
+                      </div>
                     </div>
                   </Popup>
                 </Marker>

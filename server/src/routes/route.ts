@@ -1,4 +1,7 @@
 import { Router } from 'express';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
 import { pool } from '../db.js';
 import {
@@ -14,6 +17,7 @@ import {
 } from '../cache.js';
 
 const router = Router();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const METERS_PER_MILE = 1609.344;
 const EARTH_RADIUS_METERS = 6_371_000;
@@ -40,12 +44,32 @@ type RouteResponse = {
   geometry: [number, number][];
   corridor_miles?: number;
   stations?: StationAlongRoute[];
+  truck_stops?: TruckStopAlongRoute[];
   auto_waypoints?: AutoWaypoint[];
   preference?: 'fastest' | 'charger_optimized';
   requested_preference?: 'fastest' | 'charger_optimized';
   candidates_evaluated?: number;
   max_gap_miles?: number;
   warning?: string;
+};
+
+type TruckStop = {
+  id: number;
+  brand: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  latitude: number;
+  longitude: number;
+  address: string | null;
+  phone: string | null;
+  truck_parking_spots: number | null;
+  truck_parking_raw: string | null;
+};
+
+type TruckStopAlongRoute = TruckStop & {
+  distance_to_route_miles: number;
+  distance_along_route_miles: number;
 };
 
 type StationRow = {
@@ -108,6 +132,202 @@ function ensureNumber(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+function normalizeTruckStopText(value: string): string {
+  return value.replace(/\u00a0/g, ' ').trim();
+}
+
+function parseCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i]!;
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') {
+          current += '"';
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        current += ch;
+      }
+      continue;
+    }
+
+    if (ch === ',') {
+      out.push(current);
+      current = '';
+      continue;
+    }
+
+    if (ch === '"') {
+      inQuotes = true;
+      continue;
+    }
+
+    current += ch;
+  }
+
+  out.push(current);
+  return out;
+}
+
+function deriveTruckStopBrand(name: string): string {
+  let brand = name;
+  const pipeIndex = brand.indexOf('|');
+  if (pipeIndex !== -1) brand = brand.slice(0, pipeIndex);
+  const bracketIndex = brand.indexOf('[');
+  if (bracketIndex !== -1) brand = brand.slice(0, bracketIndex);
+  brand = normalizeTruckStopText(brand);
+  return brand || 'Unknown';
+}
+
+function parseTruckStopName(rawName: string): { name: string; city: string | null; state: string | null; brand: string } {
+  const normalized = normalizeTruckStopText(rawName);
+  if (!normalized) {
+    return { name: 'Unknown', city: null, state: null, brand: 'Unknown' };
+  }
+
+  const lastDash = normalized.lastIndexOf('-');
+  let namePart = normalized;
+  let city: string | null = null;
+  let state: string | null = null;
+
+  if (lastDash > 0 && lastDash < normalized.length - 1) {
+    const maybeLocation = normalizeTruckStopText(normalized.slice(lastDash + 1));
+    const comma = maybeLocation.lastIndexOf(',');
+    if (comma > 0 && comma < maybeLocation.length - 1) {
+      namePart = normalizeTruckStopText(normalized.slice(0, lastDash));
+      city = normalizeTruckStopText(maybeLocation.slice(0, comma)) || null;
+      state = normalizeTruckStopText(maybeLocation.slice(comma + 1)) || null;
+    }
+  }
+
+  const brand = deriveTruckStopBrand(namePart);
+  return { name: namePart, city, state, brand };
+}
+
+function parseTruckStopDetails(rawDetails: string): {
+  address: string | null;
+  phone: string | null;
+  truck_parking_spots: number | null;
+  truck_parking_raw: string | null;
+} {
+  const normalized = normalizeTruckStopText(rawDetails);
+  if (!normalized) {
+    return { address: null, phone: null, truck_parking_spots: null, truck_parking_raw: null };
+  }
+
+  const parts = normalized.split('|').map((p) => normalizeTruckStopText(p)).filter(Boolean);
+  const address = parts[0] ?? null;
+  const phone = parts[1] ?? null;
+  const truckParkingRaw = parts[2] ?? null;
+
+  let truckParkingSpots: number | null = null;
+  if (truckParkingRaw && truckParkingRaw.toLowerCase() !== 'none listed') {
+    const match = truckParkingRaw.match(/(\d{1,6})/);
+    if (match) {
+      const parsed = Number.parseInt(match[1]!, 10);
+      truckParkingSpots = Number.isFinite(parsed) ? parsed : null;
+    }
+  }
+
+  return {
+    address,
+    phone,
+    truck_parking_spots: truckParkingSpots,
+    truck_parking_raw: truckParkingRaw,
+  };
+}
+
+let truckStopsPromise: Promise<TruckStop[]> | null = null;
+
+async function findTruckStopsCsvPath(): Promise<string | null> {
+  const envPath = ensureString(process.env.TRUCK_STOPS_CSV_PATH);
+  const candidates = [
+    envPath,
+    // repo root (common for local dev)
+    path.resolve(__dirname, '../../../truck_stop_location_data/truck-rv_fuel_stations.csv'),
+    // server package root (useful if bundled/copied for containers)
+    path.resolve(__dirname, '../../truck_stop_location_data/truck-rv_fuel_stations.csv'),
+    // cwd-relative fallbacks
+    path.resolve(process.cwd(), 'truck_stop_location_data/truck-rv_fuel_stations.csv'),
+    path.resolve(process.cwd(), '../truck_stop_location_data/truck-rv_fuel_stations.csv'),
+  ].filter((p): p is string => Boolean(p));
+
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {
+      // continue
+    }
+  }
+
+  return null;
+}
+
+async function loadTruckStops(): Promise<TruckStop[]> {
+  if (truckStopsPromise) return truckStopsPromise;
+
+  truckStopsPromise = (async () => {
+    const csvPath = await findTruckStopsCsvPath();
+    if (!csvPath) {
+      console.warn(
+        'Truck stops CSV not found; set TRUCK_STOPS_CSV_PATH or add truck_stop_location_data/truck-rv_fuel_stations.csv'
+      );
+      return [];
+    }
+
+    const buffer = await fs.readFile(csvPath);
+    let text = buffer.toString('utf8');
+    if (text.includes('\uFFFD')) {
+      // Fallback for non-UTF8 datasets (common in legacy CSV exports).
+      text = buffer.toString('latin1');
+    }
+
+    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+    const stops: TruckStop[] = [];
+    let id = 1;
+
+    for (const rawLine of text.split('\n')) {
+      const line = normalizeTruckStopText(rawLine);
+      if (!line) continue;
+
+      const cols = parseCsvLine(line);
+      if (cols.length < 4) continue;
+
+      const lng = ensureNumber(cols[0]);
+      const lat = ensureNumber(cols[1]);
+      if (lat === null || lng === null) continue;
+
+      const nameInfo = parseTruckStopName(cols[2] ?? '');
+      const detailInfo = parseTruckStopDetails(cols[3] ?? '');
+
+      stops.push({
+        id,
+        ...nameInfo,
+        latitude: lat,
+        longitude: lng,
+        ...detailInfo,
+      });
+      id += 1;
+    }
+
+    console.log(`Loaded ${stops.length} truck stops from ${csvPath}`);
+    return stops;
+  })().catch((error) => {
+    console.error('Failed to load truck stops:', error);
+    return [];
+  });
+
+  return truckStopsPromise;
 }
 
 function degreesToRadians(degrees: number): number {
@@ -911,6 +1131,41 @@ async function getStationsAlongRoute(options: {
   return stations;
 }
 
+async function getTruckStopsAlongRoute(options: {
+  geometry: [number, number][];
+  routeDistanceMeters: number;
+  corridorMiles: number;
+}): Promise<TruckStopAlongRoute[]> {
+  const corridorMeters = milesToMeters(options.corridorMiles);
+  if (!Number.isFinite(corridorMeters) || corridorMeters < 0) return [];
+
+  const allStops = await loadTruckStops();
+  if (allStops.length === 0) return [];
+
+  const bounds = computeBounds(options.geometry, corridorMeters);
+  const routeIndex = buildRouteIndex(options.geometry, options.routeDistanceMeters);
+
+  const matches: TruckStopAlongRoute[] = [];
+  for (const stop of allStops) {
+    if (!Number.isFinite(stop.latitude) || !Number.isFinite(stop.longitude)) continue;
+    if (stop.latitude < bounds.minLat || stop.latitude > bounds.maxLat) continue;
+    if (stop.longitude < bounds.minLng || stop.longitude > bounds.maxLng) continue;
+
+    const projection = projectPointOntoRoute(stop.latitude, stop.longitude, routeIndex);
+    if (!projection) continue;
+    if (projection.distanceToRouteMeters > corridorMeters) continue;
+
+    matches.push({
+      ...stop,
+      distance_to_route_miles: metersToMiles(projection.distanceToRouteMeters),
+      distance_along_route_miles: metersToMiles(projection.distanceAlongRouteMeters),
+    });
+  }
+
+  matches.sort((a, b) => a.distance_along_route_miles - b.distance_along_route_miles);
+  return matches;
+}
+
 function computeMaxGapMiles(stations: StationAlongRoute[], totalRouteMiles: number): number {
   if (stations.length === 0) return totalRouteMiles;
 
@@ -1495,6 +1750,15 @@ router.post('/', async (req, res) => {
     if (includeStations) {
       applyStationElevationDeltas(chosenStations ?? [], chosen);
       applyStationRanking(chosenStations ?? [], corridorMilesUsed);
+      try {
+        responseBody.truck_stops = await getTruckStopsAlongRoute({
+          geometry: chosen.geometry,
+          routeDistanceMeters: chosen.summary.distance_meters,
+          corridorMiles: corridorMilesUsed,
+        });
+      } catch (error) {
+        console.warn('Failed to compute truck stops along route:', error);
+      }
       responseBody.corridor_miles = corridorMilesUsed;
       responseBody.stations = chosenStations ?? [];
       responseBody.preference = preference;

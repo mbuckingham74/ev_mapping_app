@@ -33,12 +33,29 @@ export type AutoWaypoint = {
   longitude: number;
 };
 
+export type TruckStopAlongRoute = {
+  id: number;
+  brand: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  latitude: number;
+  longitude: number;
+  address: string | null;
+  phone: string | null;
+  truck_parking_spots: number | null;
+  truck_parking_raw: string | null;
+  distance_to_route_miles: number;
+  distance_along_route_miles: number;
+};
+
 export type RouteResponse = {
   points: RoutePoint[];
   summary: RouteSummary;
   geometry: [number, number][];
   corridor_miles?: number;
   stations?: RouteStation[];
+  truck_stops?: TruckStopAlongRoute[];
   auto_waypoints?: AutoWaypoint[];
   preference?: 'fastest' | 'charger_optimized';
   requested_preference?: 'fastest' | 'charger_optimized';

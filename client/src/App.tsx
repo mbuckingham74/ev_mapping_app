@@ -737,13 +737,13 @@ function App() {
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-[1100] bg-slate-800 border-b border-slate-700 px-6 py-4">
+      <header className="sticky top-0 z-[1100] bg-slate-800 border-b border-slate-700 px-6 py-5">
         <div className="flex justify-between items-center">
           <a href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
             <img
               src="/EV_DC_mapper_logo.png"
               alt="EV DC Route Planner"
-              className="h-14"
+              className="h-20"
             />
           </a>
           <div className="flex items-center gap-3 text-sm text-slate-400">

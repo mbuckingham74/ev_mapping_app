@@ -187,6 +187,25 @@ docker compose up -d
 docker compose logs -f
 ```
 
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Quick Start for Contributors
+
+1. Fork the repo
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Submit a pull request
+
+### Areas Where Help is Needed
+
+- Frontend UI/UX improvements
+- Backend optimization
+- iOS app features
+- Documentation
+- Testing
+
 ## License
 
 MIT

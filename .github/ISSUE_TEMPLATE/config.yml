@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question or Discussion
+    url: https://github.com/mbuckingham74/ev_mapping_app/discussions
+    about: Ask questions or start a discussion about the project
+  - name: Live Demo
+    url: https://ev.tachyonfuture.com
+    about: Try the app before reporting issues

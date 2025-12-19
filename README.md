@@ -14,6 +14,8 @@
 [![Leaflet](https://img.shields.io/badge/Leaflet-1.9-199900?style=flat-square&logo=leaflet&logoColor=white)](https://leafletjs.com/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ed?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![iOS](https://img.shields.io/badge/iOS-26.2-000000?style=flat-square&logo=apple&logoColor=white)](https://developer.apple.com/ios/)
+[![SwiftUI](https://img.shields.io/badge/SwiftUI-Framework-0078d4?style=flat-square&logo=swift&logoColor=white)](https://developer.apple.com/xcode/swiftui/)
+[![MapKit](https://img.shields.io/badge/MapKit-Apple-000000?style=flat-square&logo=apple&logoColor=white)](https://developer.apple.com/maps/)
 
 ---
 

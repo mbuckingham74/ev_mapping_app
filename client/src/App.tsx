@@ -737,12 +737,15 @@ function App() {
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
+      <header className="sticky top-0 z-[1100] bg-slate-800 border-b border-slate-700 px-4 py-2">
         <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-lg font-semibold text-white">EV</h1>
-            <p className="text-sm text-slate-400">Electrify America station finder</p>
-          </div>
+          <a href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
+            <img
+              src="/EV_DC_mapper_logo.png"
+              alt="EV DC Route Planner"
+              className="h-10"
+            />
+          </a>
           <div className="flex items-center gap-3 text-sm text-slate-400">
             <div>{loading ? 'Loading...' : `${count} stations`}</div>
             {user ? (

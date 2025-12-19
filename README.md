@@ -102,6 +102,10 @@ npm run dev
 - Frontend: http://localhost:5173
 - Backend API: http://localhost:3001
 
+### iOS App
+
+See `ios/README.md` for the SwiftUI + MapKit app setup, background tracking, and run instructions.
+
 ### Import Station Data
 
 ```bash

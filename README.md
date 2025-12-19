@@ -13,6 +13,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16_+_PostGIS-4169e1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Leaflet](https://img.shields.io/badge/Leaflet-1.9-199900?style=flat-square&logo=leaflet&logoColor=white)](https://leafletjs.com/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ed?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![iOS](https://img.shields.io/badge/iOS-26.2-000000?style=flat-square&logo=apple&logoColor=white)](https://developer.apple.com/ios/)
 
 ---
 

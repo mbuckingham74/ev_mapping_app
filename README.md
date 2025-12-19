@@ -1,6 +1,10 @@
-# EV Route Planner
+<p align="center">
+  <img src="images/EV_DC_mapper_logo.png" alt="EV DC Route Planner" width="500">
+</p>
 
-> Plan your EV road trips with confidence. Find Electrify America charging stations along your route with intelligent gap analysis and elevation-aware metrics.
+<p align="center">
+  <em>Plan your EV road trips with confidence. Find Electrify America charging stations along your route with intelligent gap analysis and elevation-aware metrics.</em>
+</p>
 
 [![Live Demo](https://img.shields.io/badge/demo-ev.tachyonfuture.com-blue?style=flat-square)](https://ev.tachyonfuture.com)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)

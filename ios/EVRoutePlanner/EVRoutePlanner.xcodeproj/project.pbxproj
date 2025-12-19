@@ -1,0 +1,587 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		2D62EDE72EF4D29100BCB2A5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2D62EDD12EF4D29000BCB2A5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2D62EDD82EF4D29000BCB2A5;
+			remoteInfo = EVRoutePlanner;
+		};
+		2D62EDF12EF4D29100BCB2A5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2D62EDD12EF4D29000BCB2A5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2D62EDD82EF4D29000BCB2A5;
+			remoteInfo = EVRoutePlanner;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		2D62EDD92EF4D29000BCB2A5 /* EVRoutePlanner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EVRoutePlanner.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2D62EDE62EF4D29100BCB2A5 /* EVRoutePlannerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EVRoutePlannerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		2D62EDF02EF4D29100BCB2A5 /* EVRoutePlannerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EVRoutePlannerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		2D62EDDB2EF4D29000BCB2A5 /* EVRoutePlanner */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = EVRoutePlanner;
+			sourceTree = "<group>";
+		};
+		2D62EDE92EF4D29100BCB2A5 /* EVRoutePlannerTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = EVRoutePlannerTests;
+			sourceTree = "<group>";
+		};
+		2D62EDF32EF4D29100BCB2A5 /* EVRoutePlannerUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = EVRoutePlannerUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		2D62EDD62EF4D29000BCB2A5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2D62EDE32EF4D29100BCB2A5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2D62EDED2EF4D29100BCB2A5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2D62EDD02EF4D29000BCB2A5 = {
+			isa = PBXGroup;
+			children = (
+				2D62EDDB2EF4D29000BCB2A5 /* EVRoutePlanner */,
+				2D62EDE92EF4D29100BCB2A5 /* EVRoutePlannerTests */,
+				2D62EDF32EF4D29100BCB2A5 /* EVRoutePlannerUITests */,
+				2D62EDDA2EF4D29000BCB2A5 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		2D62EDDA2EF4D29000BCB2A5 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				2D62EDD92EF4D29000BCB2A5 /* EVRoutePlanner.app */,
+				2D62EDE62EF4D29100BCB2A5 /* EVRoutePlannerTests.xctest */,
+				2D62EDF02EF4D29100BCB2A5 /* EVRoutePlannerUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		2D62EDD82EF4D29000BCB2A5 /* EVRoutePlanner */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2D62EDFA2EF4D29100BCB2A5 /* Build configuration list for PBXNativeTarget "EVRoutePlanner" */;
+			buildPhases = (
+				2D62EDD52EF4D29000BCB2A5 /* Sources */,
+				2D62EDD62EF4D29000BCB2A5 /* Frameworks */,
+				2D62EDD72EF4D29000BCB2A5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2D62EDDB2EF4D29000BCB2A5 /* EVRoutePlanner */,
+			);
+			name = EVRoutePlanner;
+			packageProductDependencies = (
+			);
+			productName = EVRoutePlanner;
+			productReference = 2D62EDD92EF4D29000BCB2A5 /* EVRoutePlanner.app */;
+			productType = "com.apple.product-type.application";
+		};
+		2D62EDE52EF4D29100BCB2A5 /* EVRoutePlannerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2D62EDFD2EF4D29100BCB2A5 /* Build configuration list for PBXNativeTarget "EVRoutePlannerTests" */;
+			buildPhases = (
+				2D62EDE22EF4D29100BCB2A5 /* Sources */,
+				2D62EDE32EF4D29100BCB2A5 /* Frameworks */,
+				2D62EDE42EF4D29100BCB2A5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2D62EDE82EF4D29100BCB2A5 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				2D62EDE92EF4D29100BCB2A5 /* EVRoutePlannerTests */,
+			);
+			name = EVRoutePlannerTests;
+			packageProductDependencies = (
+			);
+			productName = EVRoutePlannerTests;
+			productReference = 2D62EDE62EF4D29100BCB2A5 /* EVRoutePlannerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		2D62EDEF2EF4D29100BCB2A5 /* EVRoutePlannerUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2D62EE002EF4D29100BCB2A5 /* Build configuration list for PBXNativeTarget "EVRoutePlannerUITests" */;
+			buildPhases = (
+				2D62EDEC2EF4D29100BCB2A5 /* Sources */,
+				2D62EDED2EF4D29100BCB2A5 /* Frameworks */,
+				2D62EDEE2EF4D29100BCB2A5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2D62EDF22EF4D29100BCB2A5 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				2D62EDF32EF4D29100BCB2A5 /* EVRoutePlannerUITests */,
+			);
+			name = EVRoutePlannerUITests;
+			packageProductDependencies = (
+			);
+			productName = EVRoutePlannerUITests;
+			productReference = 2D62EDF02EF4D29100BCB2A5 /* EVRoutePlannerUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		2D62EDD12EF4D29000BCB2A5 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2620;
+				LastUpgradeCheck = 2620;
+				TargetAttributes = {
+					2D62EDD82EF4D29000BCB2A5 = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					2D62EDE52EF4D29100BCB2A5 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 2D62EDD82EF4D29000BCB2A5;
+					};
+					2D62EDEF2EF4D29100BCB2A5 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 2D62EDD82EF4D29000BCB2A5;
+					};
+				};
+			};
+			buildConfigurationList = 2D62EDD42EF4D29000BCB2A5 /* Build configuration list for PBXProject "EVRoutePlanner" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 2D62EDD02EF4D29000BCB2A5;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 2D62EDDA2EF4D29000BCB2A5 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				2D62EDD82EF4D29000BCB2A5 /* EVRoutePlanner */,
+				2D62EDE52EF4D29100BCB2A5 /* EVRoutePlannerTests */,
+				2D62EDEF2EF4D29100BCB2A5 /* EVRoutePlannerUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		2D62EDD72EF4D29000BCB2A5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2D62EDE42EF4D29100BCB2A5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2D62EDEE2EF4D29100BCB2A5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		2D62EDD52EF4D29000BCB2A5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2D62EDE22EF4D29100BCB2A5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2D62EDEC2EF4D29100BCB2A5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		2D62EDE82EF4D29100BCB2A5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2D62EDD82EF4D29000BCB2A5 /* EVRoutePlanner */;
+			targetProxy = 2D62EDE72EF4D29100BCB2A5 /* PBXContainerItemProxy */;
+		};
+		2D62EDF22EF4D29100BCB2A5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2D62EDD82EF4D29000BCB2A5 /* EVRoutePlanner */;
+			targetProxy = 2D62EDF12EF4D29100BCB2A5 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		2D62EDF82EF4D29100BCB2A5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = BK9393HRAM;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		2D62EDF92EF4D29100BCB2A5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = BK9393HRAM;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		2D62EDFB2EF4D29100BCB2A5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = BK9393HRAM;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Allow location access to track your route and alert nearby stops.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Allow location access to track your route and alert nearby stops.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.mzb74.EVRoutePlanner;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2D62EDFC2EF4D29100BCB2A5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = BK9393HRAM;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Allow location access to track your route and alert nearby stops.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Allow location access to track your route and alert nearby stops.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.mzb74.EVRoutePlanner;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		2D62EDFE2EF4D29100BCB2A5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = BK9393HRAM;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.mzb74.EVRoutePlannerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EVRoutePlanner.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EVRoutePlanner";
+			};
+			name = Debug;
+		};
+		2D62EDFF2EF4D29100BCB2A5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = BK9393HRAM;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.mzb74.EVRoutePlannerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EVRoutePlanner.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EVRoutePlanner";
+			};
+			name = Release;
+		};
+		2D62EE012EF4D29100BCB2A5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = BK9393HRAM;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.mzb74.EVRoutePlannerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = EVRoutePlanner;
+			};
+			name = Debug;
+		};
+		2D62EE022EF4D29100BCB2A5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = BK9393HRAM;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.mzb74.EVRoutePlannerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = EVRoutePlanner;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2D62EDD42EF4D29000BCB2A5 /* Build configuration list for PBXProject "EVRoutePlanner" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2D62EDF82EF4D29100BCB2A5 /* Debug */,
+				2D62EDF92EF4D29100BCB2A5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2D62EDFA2EF4D29100BCB2A5 /* Build configuration list for PBXNativeTarget "EVRoutePlanner" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2D62EDFB2EF4D29100BCB2A5 /* Debug */,
+				2D62EDFC2EF4D29100BCB2A5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2D62EDFD2EF4D29100BCB2A5 /* Build configuration list for PBXNativeTarget "EVRoutePlannerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2D62EDFE2EF4D29100BCB2A5 /* Debug */,
+				2D62EDFF2EF4D29100BCB2A5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2D62EE002EF4D29100BCB2A5 /* Build configuration list for PBXNativeTarget "EVRoutePlannerUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2D62EE012EF4D29100BCB2A5 /* Debug */,
+				2D62EE022EF4D29100BCB2A5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 2D62EDD12EF4D29000BCB2A5 /* Project object */;
+}

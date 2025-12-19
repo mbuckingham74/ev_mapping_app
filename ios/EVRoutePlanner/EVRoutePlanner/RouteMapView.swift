@@ -13,6 +13,17 @@ struct RouteMapView: UIViewRepresentable {
         mapView.showsUserLocation = true
         mapView.pointOfInterestFilter = .excludingAll
         mapView.isRotateEnabled = false
+
+        // Enable annotation clustering
+        mapView.register(
+            MKMarkerAnnotationView.self,
+            forAnnotationViewWithReuseIdentifier: MKMapViewDefaultAnnotationViewReuseIdentifier
+        )
+        mapView.register(
+            MKMarkerAnnotationView.self,
+            forAnnotationViewWithReuseIdentifier: MKMapViewDefaultClusterAnnotationViewReuseIdentifier
+        )
+
         return mapView
     }
 
@@ -24,28 +35,57 @@ struct RouteMapView: UIViewRepresentable {
             uiView.setUserTrackingMode(.none, animated: true)
         }
 
-        uiView.removeOverlays(uiView.overlays)
-        let annotations = uiView.annotations.filter { !($0 is MKUserLocation) }
-        uiView.removeAnnotations(annotations)
+        // Update route overlay only if changed
+        let newRouteSignature = routeSignature(for: route?.coordinates ?? [])
+        if context.coordinator.lastRouteSignature != newRouteSignature {
+            context.coordinator.lastRouteSignature = newRouteSignature
 
-        if let route {
-            let coordinates = route.coordinates
-            if coordinates.count >= 2 {
-                let polyline = MKPolyline(coordinates: coordinates, count: coordinates.count)
+            // Remove existing route overlay
+            let existingOverlays = uiView.overlays
+            uiView.removeOverlays(existingOverlays)
+
+            // Add new route if present
+            if let route, route.coordinates.count >= 2 {
+                let polyline = MKPolyline(coordinates: route.coordinates, count: route.coordinates.count)
                 uiView.addOverlay(polyline)
 
-                let signature = routeSignature(for: coordinates)
-                if context.coordinator.lastRouteSignature != signature && !followUser {
-                    context.coordinator.lastRouteSignature = signature
+                if !followUser {
                     let padding = UIEdgeInsets(top: 80, left: 60, bottom: 200, right: 60)
                     uiView.setVisibleMapRect(polyline.boundingMapRect, edgePadding: padding, animated: true)
                 }
             }
         }
 
-        for poi in pois {
-            uiView.addAnnotation(POIAnnotation(poi: poi))
+        // Update annotations only if POIs changed
+        updateAnnotationsIfNeeded(mapView: uiView, coordinator: context.coordinator)
+    }
+
+    private func updateAnnotationsIfNeeded(mapView: MKMapView, coordinator: Coordinator) {
+        let newPOIIds = Set(pois.map(\.id))
+
+        // Skip update if POIs haven't changed
+        if newPOIIds == coordinator.currentPOIIds {
+            return
         }
+
+        let existingAnnotations = mapView.annotations.compactMap { $0 as? POIAnnotation }
+        let existingIds = Set(existingAnnotations.map(\.poi.id))
+
+        // Remove annotations that are no longer in the list
+        let toRemove = existingAnnotations.filter { !newPOIIds.contains($0.poi.id) }
+        if !toRemove.isEmpty {
+            mapView.removeAnnotations(toRemove)
+        }
+
+        // Add new annotations that don't exist yet
+        let idsToAdd = newPOIIds.subtracting(existingIds)
+        let toAdd = pois.filter { idsToAdd.contains($0.id) }.map { POIAnnotation(poi: $0) }
+        if !toAdd.isEmpty {
+            mapView.addAnnotations(toAdd)
+        }
+
+        // Update tracking set
+        coordinator.currentPOIIds = newPOIIds
     }
 
     func makeCoordinator() -> Coordinator {
@@ -61,6 +101,11 @@ struct RouteMapView: UIViewRepresentable {
 
     final class Coordinator: NSObject, MKMapViewDelegate {
         var lastRouteSignature: String?
+        var currentPOIIds = Set<String>()
+
+        // Cache system images for better performance
+        private lazy var stationImage: UIImage? = UIImage(systemName: "bolt.car")
+        private lazy var truckStopImage: UIImage? = UIImage(systemName: "truck.box")
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let polyline = overlay as? MKPolyline {
@@ -73,6 +118,17 @@ struct RouteMapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            // Handle cluster annotations
+            if let cluster = annotation as? MKClusterAnnotation {
+                let identifier = "cluster"
+                let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
+                    ?? MKMarkerAnnotationView(annotation: cluster, reuseIdentifier: identifier)
+                view.annotation = cluster
+                view.markerTintColor = .systemBlue
+                view.glyphText = "\(cluster.memberAnnotations.count)"
+                return view
+            }
+
             guard let poiAnnotation = annotation as? POIAnnotation else {
                 return nil
             }
@@ -80,9 +136,14 @@ struct RouteMapView: UIViewRepresentable {
             let identifier = "poi"
             let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
                 ?? MKMarkerAnnotationView(annotation: poiAnnotation, reuseIdentifier: identifier)
+            view.annotation = poiAnnotation
             view.canShowCallout = true
-            view.markerTintColor = poiAnnotation.poi.kind == .truckStop ? UIColor.systemOrange : UIColor.systemGreen
-            view.glyphImage = UIImage(systemName: poiAnnotation.poi.kind == .truckStop ? "truck.box" : "bolt.car")
+            view.clusteringIdentifier = "poi-cluster"
+
+            let isStation = poiAnnotation.poi.kind == .station
+            view.markerTintColor = isStation ? UIColor.systemGreen : UIColor.systemOrange
+            view.glyphImage = isStation ? stationImage : truckStopImage
+
             return view
         }
     }

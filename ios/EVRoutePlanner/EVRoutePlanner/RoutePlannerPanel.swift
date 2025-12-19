@@ -6,6 +6,7 @@ struct RoutePlannerPanel: View {
     @ObservedObject var notificationManager: NotificationManager
 
     @State private var showOptions = false
+    @State private var isTracking = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -32,13 +33,10 @@ struct RoutePlannerPanel: View {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(viewModel.waypoints.indices, id: \.self) { index in
                         HStack {
-                            TextField("Waypoint \(index + 1)", text: Binding(
-                                get: { viewModel.waypoints[index] },
-                                set: { viewModel.updateWaypoint(at: index, value: $0) }
-                            ))
-                            .textFieldStyle(.roundedBorder)
-                            .textInputAutocapitalization(.words)
-                            .autocorrectionDisabled()
+                            TextField("Waypoint \(index + 1)", text: waypointBinding(at: index))
+                                .textFieldStyle(.roundedBorder)
+                                .textInputAutocapitalization(.words)
+                                .autocorrectionDisabled()
 
                             Button {
                                 viewModel.removeWaypoint(at: index)
@@ -88,7 +86,16 @@ struct RoutePlannerPanel: View {
                 .disabled(viewModel.route == nil && viewModel.errorMessage == nil)
             }
 
-            Toggle("Follow and alert", isOn: trackingBinding)
+            Toggle("Follow and alert", isOn: $isTracking)
+                .onChange(of: isTracking) { _, newValue in
+                    viewModel.setTracking(newValue)
+                }
+                .onAppear {
+                    isTracking = tracker.isTracking
+                }
+                .onChange(of: tracker.isTracking) { _, newValue in
+                    isTracking = newValue
+                }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Location: \(tracker.authorizationStatus.label)")
@@ -131,10 +138,14 @@ struct RoutePlannerPanel: View {
         return !trimmedStart.isEmpty && !trimmedEnd.isEmpty && !viewModel.isLoading
     }
 
-    private var trackingBinding: Binding<Bool> {
+    // Stable binding for waypoints to avoid recreation
+    private func waypointBinding(at index: Int) -> Binding<String> {
         Binding(
-            get: { tracker.isTracking },
-            set: { viewModel.setTracking($0) }
+            get: {
+                guard viewModel.waypoints.indices.contains(index) else { return "" }
+                return viewModel.waypoints[index]
+            },
+            set: { viewModel.updateWaypoint(at: index, value: $0) }
         )
     }
 }

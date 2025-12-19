@@ -19,7 +19,7 @@ struct ContentView: View {
         ZStack(alignment: .top) {
             RouteMapView(
                 route: viewModel.route,
-                pois: viewModel.route?.allPOIs ?? [],
+                pois: viewModel.cachedRoute?.allPOIs ?? [],
                 followUser: viewModel.tracker.isTracking
             )
             .ignoresSafeArea()

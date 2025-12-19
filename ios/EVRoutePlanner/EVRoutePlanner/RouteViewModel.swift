@@ -11,17 +11,22 @@ final class RouteViewModel: ObservableObject {
     @Published var preference: RoutePreference = .fastest
     @Published var isLoading = false
     @Published var errorMessage: String?
-    @Published var route: RouteResponse?
+    @Published private(set) var cachedRoute: CachedRouteResponse?
 
     let tracker: RouteTracker
     let notificationManager: NotificationManager
 
     private let apiClient: APIClient
+    private var currentRouteTask: Task<Void, Never>?
+
+    // Debounce support
+    private var planRouteSubject = PassthroughSubject<Void, Never>()
+    private var cancellables = Set<AnyCancellable>()
 
     @MainActor
     init(apiClient: APIClient = APIClient()) {
         self.apiClient = apiClient
-        
+
         // Create main actor-isolated dependencies
         self.notificationManager = NotificationManager()
         self.tracker = RouteTracker(notificationManager: notificationManager)
@@ -31,8 +36,13 @@ final class RouteViewModel: ObservableObject {
         }
     }
 
+    // Convenience accessor for the underlying RouteResponse
+    var route: RouteResponse? {
+        cachedRoute?.response
+    }
+
     var poiCount: Int {
-        route?.allPOIs.count ?? 0
+        cachedRoute?.allPOIs.count ?? 0
     }
 
     var stationCount: Int {
@@ -43,11 +53,30 @@ final class RouteViewModel: ObservableObject {
         route?.truckStops?.count ?? 0
     }
 
+    // Cached summary text to avoid repeated formatting
+    private var _cachedSummaryText: String?
+    private var _lastSummaryRoute: ObjectIdentifier?
+
     var summaryText: String? {
-        guard let summary = route?.summary else { return nil }
+        guard let cached = cachedRoute else {
+            _cachedSummaryText = nil
+            _lastSummaryRoute = nil
+            return nil
+        }
+
+        let currentId = ObjectIdentifier(cached)
+        if currentId == _lastSummaryRoute, let text = _cachedSummaryText {
+            return text
+        }
+
+        let summary = cached.response.summary
         let miles = summary.distanceMeters / 1609.344
         let hours = summary.durationSeconds / 3600
-        return "\(formatMiles(miles)) mi | \(formatDuration(hours))"
+        let text = "\(formatMiles(miles)) mi | \(formatDuration(hours))"
+
+        _cachedSummaryText = text
+        _lastSummaryRoute = currentId
+        return text
     }
 
     var warningText: String? {
@@ -69,6 +98,9 @@ final class RouteViewModel: ObservableObject {
     }
 
     func planRoute() async {
+        // Cancel any in-flight request
+        currentRouteTask?.cancel()
+
         errorMessage = nil
         let trimmedStart = start.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedEnd = end.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -82,35 +114,53 @@ final class RouteViewModel: ObservableObject {
             .filter { !$0.isEmpty }
 
         isLoading = true
-        defer { isLoading = false }
 
-        do {
-            let request = RouteRequest(
-                start: trimmedStart,
-                end: trimmedEnd,
-                waypoints: cleanedWaypoints,
-                corridorMiles: parseCorridorMiles(),
-                autoCorridor: autoCorridor,
-                includeStations: true,
-                preference: preference
-            )
+        let task = Task { @MainActor in
+            defer { isLoading = false }
 
-            let response = try await apiClient.planRoute(request: request)
-            route = response
-            tracker.updatePOIs(response.allPOIs)
+            do {
+                let request = RouteRequest(
+                    start: trimmedStart,
+                    end: trimmedEnd,
+                    waypoints: cleanedWaypoints,
+                    corridorMiles: parseCorridorMiles(),
+                    autoCorridor: autoCorridor,
+                    includeStations: true,
+                    preference: preference
+                )
 
-            if let corridor = response.corridorMiles {
-                corridorMilesText = String(format: "%.0f", corridor)
+                // Check for cancellation before making request
+                try Task.checkCancellation()
+
+                let response = try await apiClient.planRoute(request: request)
+
+                // Check for cancellation after receiving response
+                try Task.checkCancellation()
+
+                let cached = CachedRouteResponse(response)
+                cachedRoute = cached
+                tracker.updatePOIs(cached.allPOIs)
+
+                if let corridor = response.corridorMiles {
+                    corridorMilesText = String(format: "%.0f", corridor)
+                }
+            } catch is CancellationError {
+                // Request was cancelled, don't update error message
+            } catch {
+                errorMessage = error.localizedDescription
             }
-        } catch {
-            errorMessage = error.localizedDescription
         }
+
+        currentRouteTask = task
     }
 
     func clearRoute() {
-        route = nil
+        currentRouteTask?.cancel()
+        cachedRoute = nil
         errorMessage = nil
         tracker.updatePOIs([])
+        _cachedSummaryText = nil
+        _lastSummaryRoute = nil
     }
 
     func setTracking(_ enabled: Bool) {

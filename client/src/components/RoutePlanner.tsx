@@ -180,8 +180,10 @@ function NavigateSection({
 }) {
   const [includeTruckStops, setIncludeTruckStops] = useState(true);
 
+  type Waypoint = { lat: number; lng: number; mile: number; type: 'charging' | 'truckstop' };
+
   // Get charging station waypoints
-  const chargingWaypoints = useMemo(() => {
+  const chargingWaypoints = useMemo((): Waypoint[] => {
     const stations = mustStopStationIds && mustStopStationIds.size > 0
       ? routeStations.filter((s) => mustStopStationIds.has(s.id))
       : routeStations.filter((s) => s.rank_tier === 'A' || s.rank_tier === 'B');
@@ -194,7 +196,7 @@ function NavigateSection({
   }, [routeStations, mustStopStationIds]);
 
   // Get truck stop waypoints (only visible ones)
-  const truckStopWaypoints = useMemo(() => {
+  const truckStopWaypoints = useMemo((): Waypoint[] => {
     if (!visibleTruckStops || visibleTruckStops.length === 0) return [];
     return visibleTruckStops.map((ts) => ({
       lat: ts.latitude,
@@ -205,8 +207,8 @@ function NavigateSection({
   }, [visibleTruckStops]);
 
   // Combine and sort by mile marker
-  const allWaypoints = useMemo(() => {
-    const waypoints = [...chargingWaypoints];
+  const allWaypoints = useMemo((): Waypoint[] => {
+    const waypoints: Waypoint[] = [...chargingWaypoints];
     if (includeTruckStops) {
       waypoints.push(...truckStopWaypoints);
     }

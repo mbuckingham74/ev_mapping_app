@@ -1775,14 +1775,17 @@ function compareScoredRoutes(a: ScoredRoute, b: ScoredRoute, targetMaxGapMiles: 
   const aOk = a.maxGapMiles <= targetMaxGapMiles;
   const bOk = b.maxGapMiles <= targetMaxGapMiles;
 
+  // Prefer routes that meet the gap target over those that don't
   if (aOk !== bOk) return aOk ? -1 : 1;
 
+  // When both routes have acceptable gaps, prefer shorter distance
+  // (don't take big detours just for more stations)
   if (aOk && bOk) {
-    if (b.stationCount !== a.stationCount) return b.stationCount - a.stationCount;
-    if (a.maxGapMiles !== b.maxGapMiles) return a.maxGapMiles - b.maxGapMiles;
     return a.distanceMeters - b.distanceMeters;
   }
 
+  // When neither route meets the gap target, minimize gap first,
+  // then prefer more stations, then shorter distance
   if (a.maxGapMiles !== b.maxGapMiles) return a.maxGapMiles - b.maxGapMiles;
   if (b.stationCount !== a.stationCount) return b.stationCount - a.stationCount;
   return a.distanceMeters - b.distanceMeters;

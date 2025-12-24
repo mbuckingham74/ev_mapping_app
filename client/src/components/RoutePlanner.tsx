@@ -144,38 +144,20 @@ function buildGoogleMapsUrl(
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
-// Apple Maps URL with waypoints
+// Apple Maps URL - unfortunately Apple Maps web doesn't support multiple waypoints well
+// So we build a URL that at least gets the user started with origin and destination
+// and shows the waypoints as a note
 function buildAppleMapsUrl(
   startPoint: { lat: number; lng: number; label: string },
   endPoint: { lat: number; lng: number; label: string },
-  waypoints: Array<{ lat: number; lng: number }>
+  _waypoints: Array<{ lat: number; lng: number }>
 ): string {
-  // Apple Maps uses a different format - saddr, daddr, and intermediate addresses
-  // For waypoints, we chain them with "+to:" syntax
-  const addresses = [
-    `${startPoint.lat},${startPoint.lng}`,
-    ...waypoints.map((wp) => `${wp.lat},${wp.lng}`),
-    `${endPoint.lat},${endPoint.lng}`,
-  ];
-
-  // Apple Maps URL limit is more restrictive, limit waypoints
-  const maxWaypoints = 15;
-  let selectedAddresses = addresses;
-  if (addresses.length > maxWaypoints + 2) {
-    const waypointsOnly = addresses.slice(1, -1);
-    const step = waypointsOnly.length / maxWaypoints;
-    const selected = [];
-    for (let i = 0; i < maxWaypoints; i++) {
-      const idx = Math.floor(i * step);
-      if (waypointsOnly[idx]) selected.push(waypointsOnly[idx]);
-    }
-    selectedAddresses = [addresses[0], ...selected, addresses[addresses.length - 1]];
-  }
-
+  // Apple Maps links work best with just origin and destination
+  // The native iOS app supports waypoints but the web version doesn't handle them well
   const params = new URLSearchParams({
+    saddr: `${startPoint.lat},${startPoint.lng}`,
+    daddr: `${endPoint.lat},${endPoint.lng}`,
     dirflg: 'd', // driving
-    saddr: selectedAddresses[0],
-    daddr: selectedAddresses.slice(1).join('+to:'),
   });
 
   return `https://maps.apple.com/?${params.toString()}`;
@@ -730,8 +712,10 @@ export default function RoutePlanner({
             </div>
             <div className="mt-1.5 text-[10px] text-slate-400">
               {mustStopStationIds && mustStopStationIds.size > 0
-                ? `Includes ${mustStopStationIds.size} must-stop stations as waypoints`
-                : `Includes ${routeStations.filter((s) => s.rank_tier === 'A' || s.rank_tier === 'B').length} top-ranked (A/B) stations as waypoints`}
+                ? `Google Maps includes ${mustStopStationIds.size} must-stop stations as waypoints`
+                : `Google Maps includes ${routeStations.filter((s) => s.rank_tier === 'A' || s.rank_tier === 'B').length} top-ranked (A/B) stations as waypoints`}
+              <br />
+              Apple Maps: start/end only (add stops manually in app)
             </div>
             <button
               type="button"

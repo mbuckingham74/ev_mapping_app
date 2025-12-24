@@ -30,9 +30,12 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN:-https://ev.tachyonfuture.com}
       - OPENROUTESERVICE_API_KEY=${OPENROUTESERVICE_API_KEY}
       - OPENCHARMAP_API_KEY=${OPENCHARMAP_API_KEY}
+      - VISUAL_CROSSING_API_KEY=${VISUAL_CROSSING_API_KEY}
       - TRUCK_STOPS_CSV_PATH=/app/truck_stop_location_data/truck-rv_fuel_stations.csv
+      - POI_DATA_PATH=/app/poi_data
     volumes:
       - ./truck_stop_location_data:/app/truck_stop_location_data:ro
+      - ./poi_data:/app/poi_data:ro
     depends_on:
       postgres:
         condition: service_healthy

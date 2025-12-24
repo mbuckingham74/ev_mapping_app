@@ -560,6 +560,77 @@ function App() {
     };
   }, [route, routeStations]);
 
+  // Color-coded segments: green for gaps ≤80 miles, red for gaps >80 miles
+  const COLOR_THRESHOLD_MILES = 80;
+  const coloredSegments = useMemo(() => {
+    if (!route || routeStations.length === 0) return [];
+    const totalMiles = route.summary.distance_meters / METERS_PER_MILE;
+    if (!Number.isFinite(totalMiles) || totalMiles <= 0) return [];
+
+    const segments: { geometry: [number, number][]; gapMiles: number; isLong: boolean }[] = [];
+
+    // First segment: start to first station
+    const firstStation = routeStations[0];
+    if (firstStation && firstStation.distance_along_route_miles > 0) {
+      const geo = sliceGeometryByMiles({
+        geometry: route.geometry,
+        summaryDistanceMeters: route.summary.distance_meters,
+        startMiles: 0,
+        endMiles: firstStation.distance_along_route_miles,
+      });
+      if (geo) {
+        segments.push({
+          geometry: geo,
+          gapMiles: firstStation.distance_along_route_miles,
+          isLong: firstStation.distance_along_route_miles > COLOR_THRESHOLD_MILES,
+        });
+      }
+    }
+
+    // Segments between stations
+    for (let i = 1; i < routeStations.length; i++) {
+      const prev = routeStations[i - 1]!;
+      const curr = routeStations[i]!;
+      const gapMiles = curr.distance_along_route_miles - prev.distance_along_route_miles;
+      if (gapMiles > 0) {
+        const geo = sliceGeometryByMiles({
+          geometry: route.geometry,
+          summaryDistanceMeters: route.summary.distance_meters,
+          startMiles: prev.distance_along_route_miles,
+          endMiles: curr.distance_along_route_miles,
+        });
+        if (geo) {
+          segments.push({
+            geometry: geo,
+            gapMiles,
+            isLong: gapMiles > COLOR_THRESHOLD_MILES,
+          });
+        }
+      }
+    }
+
+    // Last segment: last station to end
+    const lastStation = routeStations[routeStations.length - 1];
+    if (lastStation && lastStation.distance_along_route_miles < totalMiles) {
+      const gapMiles = totalMiles - lastStation.distance_along_route_miles;
+      const geo = sliceGeometryByMiles({
+        geometry: route.geometry,
+        summaryDistanceMeters: route.summary.distance_meters,
+        startMiles: lastStation.distance_along_route_miles,
+        endMiles: totalMiles,
+      });
+      if (geo) {
+        segments.push({
+          geometry: geo,
+          gapMiles,
+          isLong: gapMiles > COLOR_THRESHOLD_MILES,
+        });
+      }
+    }
+
+    return segments;
+  }, [route, routeStations]);
+
   useEffect(() => {
     void bootstrap();
   }, []);
@@ -875,10 +946,30 @@ function App() {
 
           {route && (
             <>
+              {/* Base route line (green) */}
               <Polyline
                 positions={route.geometry}
-                pathOptions={{ color: '#ef4444', weight: 5, opacity: 0.9 }}
+                pathOptions={{ color: '#22c55e', weight: 5, opacity: 0.9 }}
               />
+              {/* Overlay red segments for gaps > 80 miles */}
+              {coloredSegments
+                .filter((seg) => seg.isLong)
+                .map((seg, idx) => (
+                  <Polyline
+                    key={`long-segment-${idx}`}
+                    positions={seg.geometry}
+                    pathOptions={{ color: '#ef4444', weight: 6, opacity: 0.95 }}
+                  >
+                    <Tooltip
+                      permanent={mapZoom >= 7}
+                      direction="center"
+                      opacity={0.9}
+                    >
+                      {formatMiles(seg.gapMiles)} mi gap
+                    </Tooltip>
+                  </Polyline>
+                ))
+              }
               {maxGapHighlight && (
                 <Polyline
                   positions={maxGapHighlight.geometry}

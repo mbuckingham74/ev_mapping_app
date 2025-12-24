@@ -1188,7 +1188,7 @@ export default function RoutePlanner({
                         <WeatherBadge weather={getStationWeather(station.distance_along_route_miles)} />
                       </div>
                       <div className="shrink-0">
-                        off-route {formatMiles(station.distance_to_route_miles)}
+                        mi {formatMiles(station.distance_along_route_miles)}
                       </div>
                     </div>
                   </button>

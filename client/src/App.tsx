@@ -361,12 +361,21 @@ function RouteStationMarker({
         </Tooltip>
         <Popup>
           <div className="min-w-[220px]">
-            <h3 className="font-bold text-slate-900">{station.station_name}</h3>
+            <h3 className="font-bold text-slate-900 flex items-center gap-2">
+              <span
+                className={`inline-block w-2.5 h-2.5 rounded-full ${station.status_code === 'E' ? 'bg-emerald-500' : 'bg-red-500'}`}
+              />
+              {station.station_name}
+            </h3>
+            {station.status_code !== 'E' && (
+              <p className="text-red-600 text-sm font-semibold">Temporarily Unavailable</p>
+            )}
             <p className="text-slate-600 text-sm">
               {station.street_address}<br />
               {station.city}, {station.state} {station.zip}
             </p>
             <div className="mt-2 text-sm">
+              <p><strong>Status:</strong> {station.status_code === 'E' ? 'Operational' : 'Temporarily Unavailable'}</p>
               <p><strong>Chargers:</strong> {station.ev_dc_fast_num} DC Fast</p>
               <p><strong>Max:</strong> {station.max_power_kw ?? '—'} kW</p>
               {station.rank_tier && typeof station.rank === 'number' && (

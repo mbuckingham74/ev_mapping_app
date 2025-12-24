@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { RouteResponse } from '../types/route';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import type { RouteResponse, RouteStation } from '../types/route';
 import type { SavedRoute } from '../types/savedRoute';
 
 type Props = {
@@ -103,6 +103,82 @@ function rankBadgeClasses(tier: 'A' | 'B' | 'C' | 'D'): string {
     default:
       return 'border-slate-600 bg-slate-800/40 text-slate-200';
   }
+}
+
+// Google Maps URL with waypoints (max ~23 waypoints due to URL limits)
+function buildGoogleMapsUrl(
+  startPoint: { lat: number; lng: number; label: string },
+  endPoint: { lat: number; lng: number; label: string },
+  waypoints: Array<{ lat: number; lng: number }>
+): string {
+  const origin = `${startPoint.lat},${startPoint.lng}`;
+  const destination = `${endPoint.lat},${endPoint.lng}`;
+
+  // Google Maps has a limit on waypoints - take evenly spaced ones if too many
+  const maxWaypoints = 20;
+  let selectedWaypoints = waypoints;
+  if (waypoints.length > maxWaypoints) {
+    const step = waypoints.length / maxWaypoints;
+    selectedWaypoints = [];
+    for (let i = 0; i < maxWaypoints; i++) {
+      const idx = Math.floor(i * step);
+      if (waypoints[idx]) selectedWaypoints.push(waypoints[idx]);
+    }
+  }
+
+  const waypointStr = selectedWaypoints
+    .map((wp) => `${wp.lat},${wp.lng}`)
+    .join('|');
+
+  const params = new URLSearchParams({
+    api: '1',
+    origin,
+    destination,
+    travelmode: 'driving',
+  });
+
+  if (waypointStr) {
+    params.set('waypoints', waypointStr);
+  }
+
+  return `https://www.google.com/maps/dir/?${params.toString()}`;
+}
+
+// Apple Maps URL with waypoints
+function buildAppleMapsUrl(
+  startPoint: { lat: number; lng: number; label: string },
+  endPoint: { lat: number; lng: number; label: string },
+  waypoints: Array<{ lat: number; lng: number }>
+): string {
+  // Apple Maps uses a different format - saddr, daddr, and intermediate addresses
+  // For waypoints, we chain them with "+to:" syntax
+  const addresses = [
+    `${startPoint.lat},${startPoint.lng}`,
+    ...waypoints.map((wp) => `${wp.lat},${wp.lng}`),
+    `${endPoint.lat},${endPoint.lng}`,
+  ];
+
+  // Apple Maps URL limit is more restrictive, limit waypoints
+  const maxWaypoints = 15;
+  let selectedAddresses = addresses;
+  if (addresses.length > maxWaypoints + 2) {
+    const waypointsOnly = addresses.slice(1, -1);
+    const step = waypointsOnly.length / maxWaypoints;
+    const selected = [];
+    for (let i = 0; i < maxWaypoints; i++) {
+      const idx = Math.floor(i * step);
+      if (waypointsOnly[idx]) selected.push(waypointsOnly[idx]);
+    }
+    selectedAddresses = [addresses[0], ...selected, addresses[addresses.length - 1]];
+  }
+
+  const params = new URLSearchParams({
+    dirflg: 'd', // driving
+    saddr: selectedAddresses[0],
+    daddr: selectedAddresses.slice(1).join('+to:'),
+  });
+
+  return `https://maps.apple.com/?${params.toString()}`;
 }
 
 export default function RoutePlanner({
@@ -305,6 +381,127 @@ export default function RoutePlanner({
     setWaypoints((prev) => prev.map((w, i) => (i === index ? value : w)));
   }
 
+  function handlePrintSummary(
+    routeData: RouteResponse,
+    stations: RouteStation[],
+    mustStops?: Set<number>
+  ) {
+    const startLabel = routeData.points[0]?.label ?? 'Start';
+    const endLabel = routeData.points[routeData.points.length - 1]?.label ?? 'End';
+    const totalMiles = (routeData.summary.distance_meters / 1609.344).toFixed(0);
+    const totalHours = Math.floor(routeData.summary.duration_seconds / 3600);
+    const totalMins = Math.round((routeData.summary.duration_seconds % 3600) / 60);
+
+    const stationRows = stations
+      .map((s, idx) => {
+        const isMustStop = mustStops?.has(s.id) ?? false;
+        const mustStopBadge = isMustStop ? ' [MUST STOP]' : '';
+        const tierBadge = s.rank_tier ? ` (${s.rank_tier})` : '';
+        const statusBadge = s.status_code !== 'E' ? ' <span style="color: #dc2626; font-weight: bold;">[OFFLINE]</span>' : '';
+        const statusDot = s.status_code === 'E'
+          ? '<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; margin-right: 6px;"></span>'
+          : '<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #dc2626; margin-right: 6px;"></span>';
+        return `
+          <tr style="border-bottom: 1px solid #ddd;${s.status_code !== 'E' ? ' background: #fef2f2;' : ''}">
+            <td style="padding: 8px; text-align: center;">${idx + 1}</td>
+            <td style="padding: 8px;">
+              ${statusDot}<strong>${s.station_name}</strong>${tierBadge}${mustStopBadge}${statusBadge}<br>
+              <span style="color: #666; font-size: 12px;">${s.street_address}<br>${s.city}, ${s.state} ${s.zip}</span>
+            </td>
+            <td style="padding: 8px; text-align: center;">${formatMiles(s.distance_along_route_miles)}</td>
+            <td style="padding: 8px; text-align: center;">+${formatMiles(s.distance_from_prev_miles)}</td>
+            <td style="padding: 8px; text-align: center;">${s.ev_dc_fast_num} DC</td>
+            <td style="padding: 8px; text-align: center;">${s.max_power_kw ?? '—'} kW</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Route Summary - ${startLabel} to ${endLabel}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; max-width: 900px; margin: 0 auto; }
+          h1 { font-size: 24px; margin-bottom: 8px; }
+          .subtitle { color: #666; margin-bottom: 20px; }
+          .summary { background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 20px; }
+          .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+          .summary-item { text-align: center; }
+          .summary-value { font-size: 24px; font-weight: bold; }
+          .summary-label { font-size: 12px; color: #666; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th { background: #333; color: white; padding: 10px; text-align: left; }
+          th:nth-child(1), th:nth-child(3), th:nth-child(4), th:nth-child(5), th:nth-child(6) { text-align: center; }
+          tr:nth-child(even) { background: #f9f9f9; }
+          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }
+          @media print {
+            body { padding: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1>EV Route Summary</h1>
+        <div class="subtitle">${startLabel} → ${endLabel}</div>
+
+        <div class="summary">
+          <div class="summary-grid">
+            <div class="summary-item">
+              <div class="summary-value">${totalMiles}</div>
+              <div class="summary-label">Miles</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-value">${totalHours}h ${totalMins}m</div>
+              <div class="summary-label">Drive Time</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-value">${stations.length}</div>
+              <div class="summary-label">Stations</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-value">${routeData.max_gap_miles ? formatMiles(routeData.max_gap_miles) : '—'}</div>
+              <div class="summary-label">Max Gap</div>
+            </div>
+          </div>
+        </div>
+
+        <h2>Charging Stations Along Route</h2>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 40px;">#</th>
+              <th>Station</th>
+              <th style="width: 80px;">Mile</th>
+              <th style="width: 80px;">Gap</th>
+              <th style="width: 70px;">Chargers</th>
+              <th style="width: 70px;">Power</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${stationRows}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          Generated by EV DC Route Planner • ev.tachyonfuture.com • ${new Date().toLocaleDateString()}
+        </div>
+
+        <div class="no-print" style="margin-top: 20px; text-align: center;">
+          <button onclick="window.print()" style="padding: 10px 24px; font-size: 16px; cursor: pointer;">Print / Save as PDF</button>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+    }
+  }
+
   return (
     <div className="bg-slate-900/95 text-slate-100 border border-slate-700 rounded-lg shadow-lg p-4 backdrop-blur">
       <div className="flex items-start justify-between gap-3">
@@ -493,6 +690,56 @@ export default function RoutePlanner({
                 <span className="font-medium">{formatMiles(route.max_gap_miles)}</span>
               </div>
             )}
+          </div>
+        )}
+
+        {route && route.points.length >= 2 && (
+          <div className="text-xs text-slate-200 bg-slate-800/40 border border-slate-700 rounded-md px-3 py-2">
+            <div className="font-medium text-slate-100 mb-2">Navigate with charging stops</div>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={buildGoogleMapsUrl(
+                  { lat: route.points[0].lat, lng: route.points[0].lng, label: route.points[0].label },
+                  { lat: route.points[route.points.length - 1].lat, lng: route.points[route.points.length - 1].lng, label: route.points[route.points.length - 1].label },
+                  (mustStopStationIds && mustStopStationIds.size > 0
+                    ? routeStations.filter((s) => mustStopStationIds.has(s.id))
+                    : routeStations.filter((s) => s.rank_tier === 'A' || s.rank_tier === 'B')
+                  ).map((s) => ({ lat: s.latitude, lng: s.longitude }))
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 rounded-md bg-blue-600 hover:bg-blue-500 px-3 py-1.5 text-[11px] font-semibold text-center"
+              >
+                Google Maps
+              </a>
+              <a
+                href={buildAppleMapsUrl(
+                  { lat: route.points[0].lat, lng: route.points[0].lng, label: route.points[0].label },
+                  { lat: route.points[route.points.length - 1].lat, lng: route.points[route.points.length - 1].lng, label: route.points[route.points.length - 1].label },
+                  (mustStopStationIds && mustStopStationIds.size > 0
+                    ? routeStations.filter((s) => mustStopStationIds.has(s.id))
+                    : routeStations.filter((s) => s.rank_tier === 'A' || s.rank_tier === 'B')
+                  ).map((s) => ({ lat: s.latitude, lng: s.longitude }))
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 rounded-md bg-slate-600 hover:bg-slate-500 px-3 py-1.5 text-[11px] font-semibold text-center"
+              >
+                Apple Maps
+              </a>
+            </div>
+            <div className="mt-1.5 text-[10px] text-slate-400">
+              {mustStopStationIds && mustStopStationIds.size > 0
+                ? `Includes ${mustStopStationIds.size} must-stop stations as waypoints`
+                : `Includes ${routeStations.filter((s) => s.rank_tier === 'A' || s.rank_tier === 'B').length} top-ranked (A/B) stations as waypoints`}
+            </div>
+            <button
+              type="button"
+              onClick={() => handlePrintSummary(route, routeStations, mustStopStationIds)}
+              className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 text-[11px] font-semibold text-slate-200"
+            >
+              Print route summary
+            </button>
           </div>
         )}
 
@@ -739,10 +986,22 @@ export default function RoutePlanner({
                     ].join(' ')}
                   >
                     <div className="flex justify-between gap-3">
-                      <div className="font-medium text-slate-100 truncate">
+                      <div className="font-medium text-slate-100 truncate flex items-center gap-1.5">
+                        <span
+                          className={[
+                            'inline-block w-2 h-2 rounded-full shrink-0',
+                            station.status_code === 'E' ? 'bg-emerald-500' : 'bg-red-500',
+                          ].join(' ')}
+                          title={station.status_code === 'E' ? 'Operational' : 'Temporarily unavailable'}
+                        />
                         {idx + 1}. {station.station_name}
                       </div>
                       <div className="shrink-0 flex items-center gap-2">
+                        {station.status_code !== 'E' && (
+                          <span className="inline-flex items-center rounded-full border border-red-700 bg-red-900/40 px-2 py-0.5 text-[10px] font-semibold text-red-100">
+                            OFFLINE
+                          </span>
+                        )}
                         {mustStopStationIds?.has(station.id) && (
                           <span className="inline-flex items-center rounded-full border border-amber-700 bg-amber-900/40 px-2 py-0.5 text-[10px] font-semibold text-amber-100">
                             MUST STOP

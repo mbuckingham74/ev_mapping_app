@@ -839,6 +839,7 @@ function App() {
             truckStopBrandCounts={truckStopBrandCounts}
             truckStopTotalCount={routeTruckStops.length}
             truckStopVisibleCount={visibleTruckStops.length}
+            visibleTruckStops={visibleTruckStops}
             selectedTruckStopBrands={selectedTruckStopBrands}
             onToggleTruckStopBrand={toggleTruckStopBrand}
             onSetAllTruckStopBrands={setAllTruckStopBrands}

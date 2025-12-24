@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { RouteResponse, RouteStation } from '../types/route';
+import type { RouteResponse, RouteStation, TruckStopAlongRoute } from '../types/route';
 import type { SavedRoute } from '../types/savedRoute';
 
 type Props = {
@@ -10,6 +10,7 @@ type Props = {
   truckStopBrandCounts?: Array<{ brand: string; count: number }>;
   truckStopTotalCount?: number;
   truckStopVisibleCount?: number;
+  visibleTruckStops?: TruckStopAlongRoute[];
   selectedTruckStopBrands?: Set<string>;
   onToggleTruckStopBrand?: (brand: string) => void;
   onSetAllTruckStopBrands?: (selectAll: boolean) => void;
@@ -163,6 +164,116 @@ function buildAppleMapsUrl(
   return `https://maps.apple.com/?${params.toString()}`;
 }
 
+// Navigate section with Google/Apple Maps export and print
+function NavigateSection({
+  route,
+  routeStations,
+  mustStopStationIds,
+  visibleTruckStops,
+  onPrintSummary,
+}: {
+  route: RouteResponse;
+  routeStations: RouteStation[];
+  mustStopStationIds?: Set<number>;
+  visibleTruckStops?: TruckStopAlongRoute[];
+  onPrintSummary: (route: RouteResponse, stations: RouteStation[], mustStops?: Set<number>) => void;
+}) {
+  const [includeTruckStops, setIncludeTruckStops] = useState(true);
+
+  // Get charging station waypoints
+  const chargingWaypoints = useMemo(() => {
+    const stations = mustStopStationIds && mustStopStationIds.size > 0
+      ? routeStations.filter((s) => mustStopStationIds.has(s.id))
+      : routeStations.filter((s) => s.rank_tier === 'A' || s.rank_tier === 'B');
+    return stations.map((s) => ({
+      lat: s.latitude,
+      lng: s.longitude,
+      mile: s.distance_along_route_miles,
+      type: 'charging' as const,
+    }));
+  }, [routeStations, mustStopStationIds]);
+
+  // Get truck stop waypoints (only visible ones)
+  const truckStopWaypoints = useMemo(() => {
+    if (!visibleTruckStops || visibleTruckStops.length === 0) return [];
+    return visibleTruckStops.map((ts) => ({
+      lat: ts.latitude,
+      lng: ts.longitude,
+      mile: ts.distance_along_route_miles,
+      type: 'truckstop' as const,
+    }));
+  }, [visibleTruckStops]);
+
+  // Combine and sort by mile marker
+  const allWaypoints = useMemo(() => {
+    const waypoints = [...chargingWaypoints];
+    if (includeTruckStops) {
+      waypoints.push(...truckStopWaypoints);
+    }
+    return waypoints.sort((a, b) => a.mile - b.mile);
+  }, [chargingWaypoints, truckStopWaypoints, includeTruckStops]);
+
+  const chargingCount = chargingWaypoints.length;
+  const truckStopCount = truckStopWaypoints.length;
+
+  return (
+    <div className="text-xs text-slate-200 bg-slate-800/40 border border-slate-700 rounded-md px-3 py-2">
+      <div className="font-medium text-slate-100 mb-2">Navigate with stops</div>
+
+      {truckStopCount > 0 && (
+        <label className="flex items-center gap-2 mb-2 text-[11px] text-slate-200">
+          <input
+            type="checkbox"
+            checked={includeTruckStops}
+            onChange={(e) => setIncludeTruckStops(e.target.checked)}
+            className="h-3.5 w-3.5 accent-sky-500"
+          />
+          Include truck stops ({truckStopCount} visible)
+        </label>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <a
+          href={buildGoogleMapsUrl(
+            { lat: route.points[0].lat, lng: route.points[0].lng, label: route.points[0].label },
+            { lat: route.points[route.points.length - 1].lat, lng: route.points[route.points.length - 1].lng, label: route.points[route.points.length - 1].label },
+            allWaypoints.map((wp) => ({ lat: wp.lat, lng: wp.lng }))
+          )}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 rounded-md bg-blue-600 hover:bg-blue-500 px-3 py-1.5 text-[11px] font-semibold text-center"
+        >
+          Google Maps
+        </a>
+        <a
+          href={buildAppleMapsUrl(
+            { lat: route.points[0].lat, lng: route.points[0].lng, label: route.points[0].label },
+            { lat: route.points[route.points.length - 1].lat, lng: route.points[route.points.length - 1].lng, label: route.points[route.points.length - 1].label },
+            []
+          )}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 rounded-md bg-slate-600 hover:bg-slate-500 px-3 py-1.5 text-[11px] font-semibold text-center"
+        >
+          Apple Maps
+        </a>
+      </div>
+      <div className="mt-1.5 text-[10px] text-slate-400">
+        Google Maps: {chargingCount} charging{includeTruckStops && truckStopCount > 0 ? ` + ${truckStopCount} truck stops` : ''} = {allWaypoints.length} waypoints
+        <br />
+        Apple Maps: start/end only (add stops manually in app)
+      </div>
+      <button
+        type="button"
+        onClick={() => onPrintSummary(route, routeStations, mustStopStationIds)}
+        className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 text-[11px] font-semibold text-slate-200"
+      >
+        Print route summary
+      </button>
+    </div>
+  );
+}
+
 export default function RoutePlanner({
   route,
   loading,
@@ -171,6 +282,7 @@ export default function RoutePlanner({
   truckStopBrandCounts,
   truckStopTotalCount,
   truckStopVisibleCount,
+  visibleTruckStops,
   selectedTruckStopBrands,
   onToggleTruckStopBrand,
   onSetAllTruckStopBrands,
@@ -676,55 +788,13 @@ export default function RoutePlanner({
         )}
 
         {route && route.points.length >= 2 && (
-          <div className="text-xs text-slate-200 bg-slate-800/40 border border-slate-700 rounded-md px-3 py-2">
-            <div className="font-medium text-slate-100 mb-2">Navigate with charging stops</div>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href={buildGoogleMapsUrl(
-                  { lat: route.points[0].lat, lng: route.points[0].lng, label: route.points[0].label },
-                  { lat: route.points[route.points.length - 1].lat, lng: route.points[route.points.length - 1].lng, label: route.points[route.points.length - 1].label },
-                  (mustStopStationIds && mustStopStationIds.size > 0
-                    ? routeStations.filter((s) => mustStopStationIds.has(s.id))
-                    : routeStations.filter((s) => s.rank_tier === 'A' || s.rank_tier === 'B')
-                  ).map((s) => ({ lat: s.latitude, lng: s.longitude }))
-                )}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 rounded-md bg-blue-600 hover:bg-blue-500 px-3 py-1.5 text-[11px] font-semibold text-center"
-              >
-                Google Maps
-              </a>
-              <a
-                href={buildAppleMapsUrl(
-                  { lat: route.points[0].lat, lng: route.points[0].lng, label: route.points[0].label },
-                  { lat: route.points[route.points.length - 1].lat, lng: route.points[route.points.length - 1].lng, label: route.points[route.points.length - 1].label },
-                  (mustStopStationIds && mustStopStationIds.size > 0
-                    ? routeStations.filter((s) => mustStopStationIds.has(s.id))
-                    : routeStations.filter((s) => s.rank_tier === 'A' || s.rank_tier === 'B')
-                  ).map((s) => ({ lat: s.latitude, lng: s.longitude }))
-                )}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 rounded-md bg-slate-600 hover:bg-slate-500 px-3 py-1.5 text-[11px] font-semibold text-center"
-              >
-                Apple Maps
-              </a>
-            </div>
-            <div className="mt-1.5 text-[10px] text-slate-400">
-              {mustStopStationIds && mustStopStationIds.size > 0
-                ? `Google Maps includes ${mustStopStationIds.size} must-stop stations as waypoints`
-                : `Google Maps includes ${routeStations.filter((s) => s.rank_tier === 'A' || s.rank_tier === 'B').length} top-ranked (A/B) stations as waypoints`}
-              <br />
-              Apple Maps: start/end only (add stops manually in app)
-            </div>
-            <button
-              type="button"
-              onClick={() => handlePrintSummary(route, routeStations, mustStopStationIds)}
-              className="mt-2 w-full rounded-md border border-slate-600 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 text-[11px] font-semibold text-slate-200"
-            >
-              Print route summary
-            </button>
-          </div>
+          <NavigateSection
+            route={route}
+            routeStations={routeStations}
+            mustStopStationIds={mustStopStationIds}
+            visibleTruckStops={visibleTruckStops}
+            onPrintSummary={handlePrintSummary}
+          />
         )}
 
         {route?.warning && (

@@ -862,9 +862,12 @@ function App() {
           className="h-full w-full"
           scrollWheelZoom={true}
           zoomControl={false}
+          minZoom={3}
+          maxBounds={[[-85, -180], [85, 180]]}
+          maxBoundsViscosity={1.0}
         >
           <MapZoomTracker onZoomChange={setMapZoom} />
-          <ZoomControl position="topright" />
+          <ZoomControl position="bottomright" />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

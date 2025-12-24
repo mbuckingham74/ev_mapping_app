@@ -13,6 +13,15 @@ body {
   @apply h-full w-full bg-slate-800;
 }
 
+/* Ensure zoom controls are always visible */
+.leaflet-control-zoom {
+  z-index: 1000 !important;
+}
+
+.leaflet-bottom.leaflet-right {
+  z-index: 1000 !important;
+}
+
 .auto-waypoint-div-icon {
   background: transparent;
   border: none;

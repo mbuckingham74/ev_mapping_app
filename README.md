@@ -47,9 +47,17 @@ Web app: https://ev.tachyonfuture.com
 - **Print Route Summary** — Generate a printable PDF with all charging stops, distances, and station details
 - **Shareable Links** — Generate URLs with route parameters for easy sharing
 
+### Weather Along Route
+- **Weather Forecasts** — Shows weather conditions at ~100-mile intervals plus charging stations
+- **Weather Timeline** — Horizontal scrollable panel with temperature, conditions, and estimated arrival times
+- **Station Weather Badges** — Compact weather display on each station card showing temp and conditions
+- **Smart Alerts** — Precipitation and wind warnings when conditions exceed thresholds
+
 ### Points of Interest
 - **Truck Stops Along Route** — Plots truck stop POIs within the corridor (orange markers) with brand filtering
 - **Default Brand Filter** — Shows only major chains (Love's, Pilot/Flying J, TA+Petro, Road Ranger) by default
+- **McDonald's Locations** — Optional POI layer showing McDonald's within 2 miles of route (13,400+ US locations)
+- **Starbucks Locations** — Optional POI layer (coming soon)
 
 ### Data & Accounts
 - **Daily Station Updates** — Automated refresh from OpenChargeMap keeps station status current
@@ -71,7 +79,7 @@ Web app: https://ev.tachyonfuture.com
 ev-app/
 ├── client/                 # React frontend
 │   ├── src/
-│   │   ├── components/     # UI components (RoutePlanner, etc.)
+│   │   ├── components/     # UI components (RoutePlanner, WeatherTimeline, etc.)
 │   │   ├── services/       # API client
 │   │   └── types/          # TypeScript types
 │   └── Dockerfile
@@ -80,7 +88,9 @@ ev-app/
 │   │   ├── routes/         # API endpoints
 │   │   └── migrations/     # Database migrations
 │   └── Dockerfile
+├── poi_data/               # POI data files (McDonald's CSV, etc.)
 ├── truck_stop_location_data/ # Truck stop POIs (CSV)
+├── scripts/                # Data fetch scripts
 └── docker-compose.yml      # Production deployment
 ```
 
@@ -112,6 +122,7 @@ Edit `.env` with your API keys:
 | `DB_PASSWORD` | PostgreSQL password |
 | `OPENCHARMAP_API_KEY` | [OpenChargeMap](https://openchargemap.org/site/develop/api) API key |
 | `OPENROUTESERVICE_API_KEY` | [OpenRouteService](https://openrouteservice.org/) API key |
+| `VISUAL_CROSSING_API_KEY` | [Visual Crossing](https://www.visualcrossing.com/) API key (for weather) |
 
 ### Run Locally
 
@@ -161,6 +172,8 @@ See `.ev_mapping_app.md` (internal technical notes) for full details.
 4. **Gap Analysis** — Calculates distances between stations and identifies max gaps
 5. **Optimization** — In "charger optimized" mode, may widen corridor or insert waypoints to reduce gaps
 6. **Ranking** — Scores stations by power (kW), stall count, and distance from route
+7. **Weather Fetching** — Gets forecasts at 100-mile intervals plus station locations via Visual Crossing API
+8. **POI Overlay** — Projects truck stops, McDonald's, and other POIs onto the route corridor
 
 ## Configuration
 
@@ -232,3 +245,4 @@ MIT
 - [OpenChargeMap](https://openchargemap.org/) — Charging station data
 - [OpenRouteService](https://openrouteservice.org/) — Geocoding and routing
 - [OpenStreetMap](https://www.openstreetmap.org/) — Map tiles
+- [Visual Crossing](https://www.visualcrossing.com/) — Weather forecasts

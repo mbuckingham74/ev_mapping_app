@@ -27,19 +27,34 @@ Web app: https://ev.tachyonfuture.com
 
 ## Features
 
+### Route Planning
 - **Smart Route Planning** — Enter cities or full addresses with optional waypoints
 - **DC Charger Optimized Mode** — Finds routes that maximize charging options, even if slightly longer
 - **Corridor-Based Station Search** — PostGIS-powered queries find stations within X miles of your route
 - **Auto Corridor (Min Clutter)** — Starts narrow and widens only if needed to keep max gaps within your range
-- **Truck Stops Along Route** — Plots truck stop POIs within the corridor (orange markers) with brand filtering
 - **Auto-Expanding Corridors** — Automatically widens search when needed to ensure viable charging gaps
-- **Must Stop Highlights** — Flags critical chargers and lets you filter the map down to only “MUST STOP” stations
+
+### Visualization
+- **Color-Coded Route Segments** — Green for gaps ≤80 miles, red for gaps >80 miles between chargers
+- **Station Status Indicators** — Green/red dots show operational vs temporarily unavailable stations
+- **Must Stop Highlights** — Flags critical chargers and lets you filter the map down to only "MUST STOP" stations
 - **Elevation Metrics** — See total climb/descent plus per-leg elevation changes between stations
 - **Station Ranking** — A–D tier ratings based on charger power, stall count, and proximity
+
+### Navigation & Export
+- **Export to Google Maps** — One-click export with charging stations and truck stops as waypoints
+- **Export to Apple Maps** — Quick launch with start/end points
+- **Print Route Summary** — Generate a printable PDF with all charging stops, distances, and station details
+- **Shareable Links** — Generate URLs with route parameters for easy sharing
+
+### Points of Interest
+- **Truck Stops Along Route** — Plots truck stop POIs within the corridor (orange markers) with brand filtering
+- **Default Brand Filter** — Shows only major chains (Love's, Pilot/Flying J, TA+Petro, Road Ranger) by default
+
+### Data & Accounts
+- **Daily Station Updates** — Automated refresh from OpenChargeMap keeps station status current
 - **Risk Alerts** — Warnings when gaps exceed your range or you'd arrive below minimum charge
 - **User Accounts** — Save routes and vehicle preferences (range, efficiency, min arrival %)
-- **Shareable Links** — Generate URLs with route parameters for easy sharing
-- **Color-Coded Route Endpoints** — Start marker is green; destination marker is red
 
 ## Tech Stack
 
@@ -122,6 +137,8 @@ npm run fetch:stations
 ```
 
 This fetches ~1,100 Electrify America stations from OpenChargeMap.
+
+**Note:** Station data is automatically refreshed daily via cron job to keep status information current.
 
 ## API Overview
 

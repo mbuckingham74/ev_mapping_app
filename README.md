@@ -29,7 +29,7 @@ Web app: https://ev.tachyonfuture.com
 
 ### Route Planning
 - **Smart Route Planning** — Enter cities or full addresses with optional waypoints
-- **DC Charger Optimized Mode** — Finds routes that maximize charging options, even if slightly longer
+- **DC Charger Optimized Mode** — Evaluates alternative routes and selects the shortest one with adequate charging coverage
 - **Corridor-Based Station Search** — PostGIS-powered queries find stations within X miles of your route
 - **Auto Corridor (Min Clutter)** — Starts narrow and widens only if needed to keep max gaps within your range
 - **Auto-Expanding Corridors** — Automatically widens search when needed to ensure viable charging gaps
@@ -40,6 +40,7 @@ Web app: https://ev.tachyonfuture.com
 - **Must Stop Highlights** — Flags critical chargers and lets you filter the map down to only "MUST STOP" stations
 - **Elevation Metrics** — See total climb/descent plus per-leg elevation changes between stations
 - **Station Ranking** — A–D tier ratings based on charger power, stall count, and proximity
+- **Station Details** — Each station shows mile marker, off-route detour distance, gap from previous station, and elevation change
 
 ### Navigation & Export
 - **Export to Google Maps** — One-click export with charging stations and truck stops as waypoints

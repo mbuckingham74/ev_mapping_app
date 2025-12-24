@@ -287,9 +287,22 @@ function MapZoomTracker({ onZoomChange }: { onZoomChange: (zoom: number) => void
 
 function PanToSelection({ position }: { position: [number, number] | null }) {
   const map = useMap();
+  const lastPannedPosition = useRef<[number, number] | null>(null);
 
   useEffect(() => {
-    if (!position) return;
+    if (!position) {
+      lastPannedPosition.current = null;
+      return;
+    }
+    // Only pan if this is a new position (prevents re-panning on every render)
+    if (
+      lastPannedPosition.current &&
+      lastPannedPosition.current[0] === position[0] &&
+      lastPannedPosition.current[1] === position[1]
+    ) {
+      return;
+    }
+    lastPannedPosition.current = position;
     const targetZoom = Math.max(map.getZoom(), 12);
     map.setView(position, targetZoom, { animate: true });
   }, [map, position]);

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { RouteResponse, RouteStation, TruckStopAlongRoute } from '../types/route';
+import type { RouteResponse, RouteStation, TruckStopAlongRoute, RechargePOICategory } from '../types/route';
 import type { SavedRoute } from '../types/savedRoute';
 
 type Props = {
@@ -14,6 +14,12 @@ type Props = {
   selectedTruckStopBrands?: Set<string>;
   onToggleTruckStopBrand?: (brand: string) => void;
   onSetAllTruckStopBrands?: (selectAll: boolean) => void;
+  rechargePOICategoryCounts?: Array<{ category: RechargePOICategory; count: number }>;
+  rechargePOITotalCount?: number;
+  rechargePOIVisibleCount?: number;
+  selectedRechargePOICategories?: Set<RechargePOICategory>;
+  onToggleRechargePOICategory?: (category: RechargePOICategory) => void;
+  onSetAllRechargePOICategories?: (selectAll: boolean) => void;
   mustStopStationIds?: Set<number>;
   showMustStopsOnly?: boolean;
   onSetShowMustStopsOnly?: (showMustStopsOnly: boolean) => void;
@@ -288,6 +294,12 @@ export default function RoutePlanner({
   selectedTruckStopBrands,
   onToggleTruckStopBrand,
   onSetAllTruckStopBrands,
+  rechargePOICategoryCounts,
+  rechargePOITotalCount,
+  rechargePOIVisibleCount,
+  selectedRechargePOICategories,
+  onToggleRechargePOICategory,
+  onSetAllRechargePOICategories,
   mustStopStationIds,
   showMustStopsOnly,
   onSetShowMustStopsOnly,
@@ -989,6 +1001,67 @@ export default function RoutePlanner({
                           className="h-3.5 w-3.5 accent-orange-500"
                         />
                         <span className="min-w-0 flex-1 truncate">{brand}</span>
+                        <span className="shrink-0 tabular-nums text-slate-400">{count}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {route && typeof rechargePOITotalCount === 'number' && (
+          <div className="text-xs text-slate-200 bg-slate-800/40 border border-slate-700 rounded-md px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="font-medium text-slate-100">Recharge and Work POIs</div>
+              <div className="text-[11px] text-slate-400">
+                {typeof rechargePOIVisibleCount === 'number' ? `${rechargePOIVisibleCount}/` : ''}
+                {rechargePOITotalCount}
+              </div>
+            </div>
+
+            {rechargePOITotalCount === 0 ? (
+              <div className="mt-1 text-[11px] text-slate-400">
+                No McDonald's or Starbucks data available. Add CSV files to poi_data/.
+              </div>
+            ) : (
+              <>
+                <div className="mt-2 flex items-center gap-2 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={onSetAllRechargePOICategories ? () => onSetAllRechargePOICategories(true) : undefined}
+                    disabled={!onSetAllRechargePOICategories}
+                    className="rounded-md border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onSetAllRechargePOICategories ? () => onSetAllRechargePOICategories(false) : undefined}
+                    disabled={!onSetAllRechargePOICategories}
+                    className="rounded-md border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+                  >
+                    None
+                  </button>
+                </div>
+
+                {(rechargePOICategoryCounts?.length ?? 0) > 0 && selectedRechargePOICategories && onToggleRechargePOICategory && (
+                  <div className="mt-2 space-y-1">
+                    {rechargePOICategoryCounts!.map(({ category, count }) => (
+                      <label key={category} className="flex items-center gap-2 text-[11px] text-slate-200">
+                        <input
+                          type="checkbox"
+                          checked={selectedRechargePOICategories.has(category)}
+                          onChange={() => onToggleRechargePOICategory(category)}
+                          className={`h-3.5 w-3.5 ${category === 'mcdonalds' ? 'accent-yellow-500' : 'accent-emerald-500'}`}
+                        />
+                        <span className="min-w-0 flex-1 truncate">
+                          {category === 'mcdonalds' ? "McDonald's" : 'Starbucks'}
+                          <span className="text-slate-500 ml-1">
+                            ({category === 'mcdonalds' ? '≤2 mi' : '≤5 mi'} off-route)
+                          </span>
+                        </span>
                         <span className="shrink-0 tabular-nums text-slate-400">{count}</span>
                       </label>
                     ))}

@@ -45,6 +45,7 @@ type RouteResponse = {
   corridor_miles?: number;
   stations?: StationAlongRoute[];
   truck_stops?: TruckStopAlongRoute[];
+  recharge_pois?: RechargePOIAlongRoute[];
   auto_waypoints?: AutoWaypoint[];
   preference?: 'fastest' | 'charger_optimized';
   requested_preference?: 'fastest' | 'charger_optimized';
@@ -68,6 +69,24 @@ type TruckStop = {
 };
 
 type TruckStopAlongRoute = TruckStop & {
+  distance_to_route_miles: number;
+  distance_along_route_miles: number;
+};
+
+// Generic POI type for recharge/work stops (McDonald's, Starbucks, etc.)
+type RechargePOI = {
+  id: number;
+  category: 'mcdonalds' | 'starbucks';
+  name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  phone: string | null;
+  latitude: number;
+  longitude: number;
+};
+
+type RechargePOIAlongRoute = RechargePOI & {
   distance_to_route_miles: number;
   distance_along_route_miles: number;
 };
@@ -328,6 +347,233 @@ async function loadTruckStops(): Promise<TruckStop[]> {
   });
 
   return truckStopsPromise;
+}
+
+// Recharge POI (McDonald's, Starbucks) loading
+// Distance limits: McDonald's = 2 miles, Starbucks = 5 miles
+const RECHARGE_POI_CORRIDOR_LIMITS: Record<RechargePOI['category'], number> = {
+  mcdonalds: 2,
+  starbucks: 5,
+};
+
+let rechargePoisPromise: Promise<RechargePOI[]> | null = null;
+
+async function findRechargePOICsvPath(category: RechargePOI['category']): Promise<string | null> {
+  const envKey = category === 'mcdonalds' ? 'MCDONALDS_CSV_PATH' : 'STARBUCKS_CSV_PATH';
+  const filename = category === 'mcdonalds' ? 'mcdonalds.csv' : 'starbucks.csv';
+  const envPath = ensureString(process.env[envKey]);
+
+  const candidates = [
+    envPath,
+    path.resolve(__dirname, `../../../poi_data/${filename}`),
+    path.resolve(__dirname, `../../poi_data/${filename}`),
+    path.resolve(process.cwd(), `poi_data/${filename}`),
+    path.resolve(process.cwd(), `../poi_data/${filename}`),
+  ].filter((p): p is string => Boolean(p));
+
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {
+      // continue
+    }
+  }
+
+  return null;
+}
+
+function detectCsvFormat(headers: string[]): 'simple' | 'data-m8' | 'kaggle' | 'unknown' {
+  const lowerHeaders = headers.map((h) => h.toLowerCase().trim());
+
+  // data-m8 format: store_brand,store_id,store_name,street_address,city,state_code,...
+  if (lowerHeaders.includes('store_brand') || lowerHeaders.includes('store_name')) {
+    return 'data-m8';
+  }
+
+  // Kaggle Starbucks format: Brand,Store Number,Store Name,Ownership Type,Street Address,City,State/Province,...
+  if (lowerHeaders.includes('brand') || lowerHeaders.includes('store number')) {
+    return 'kaggle';
+  }
+
+  // Simple format: longitude,latitude,name,address,city,state,phone
+  if (lowerHeaders.includes('longitude') && lowerHeaders.includes('latitude')) {
+    return 'simple';
+  }
+
+  return 'unknown';
+}
+
+function parseRechargePOICsv(text: string, category: RechargePOI['category']): RechargePOI[] {
+  const lines = text.split('\n');
+  if (lines.length < 2) return [];
+
+  const headerLine = lines[0] ?? '';
+  const headers = parseCsvLine(headerLine);
+  const format = detectCsvFormat(headers);
+
+  const pois: RechargePOI[] = [];
+  let id = 1;
+
+  // Build header index map
+  const headerIndex = new Map<string, number>();
+  headers.forEach((h, i) => headerIndex.set(h.toLowerCase().trim(), i));
+
+  for (let i = 1; i < lines.length; i++) {
+    const rawLine = lines[i];
+    if (!rawLine) continue;
+    const line = normalizeTruckStopText(rawLine);
+    if (!line) continue;
+
+    const cols = parseCsvLine(line);
+    if (cols.length < 2) continue;
+
+    let lat: number | null = null;
+    let lng: number | null = null;
+    let name: string | null = null;
+    let address: string | null = null;
+    let city: string | null = null;
+    let state: string | null = null;
+    let phone: string | null = null;
+
+    if (format === 'data-m8') {
+      // data-m8: store_brand,store_id,store_name,street_address,city,state_code,state_name,country_name,country_code,postal_code,phone_number,latitude,longitude,...
+      lat = ensureNumber(cols[headerIndex.get('latitude') ?? -1]);
+      lng = ensureNumber(cols[headerIndex.get('longitude') ?? -1]);
+      name = ensureString(cols[headerIndex.get('store_name') ?? -1]);
+      address = ensureString(cols[headerIndex.get('street_address') ?? -1]);
+      city = ensureString(cols[headerIndex.get('city') ?? -1]);
+      state = ensureString(cols[headerIndex.get('state_code') ?? -1]) ?? ensureString(cols[headerIndex.get('state') ?? -1]);
+      phone = ensureString(cols[headerIndex.get('phone_number') ?? -1]) ?? ensureString(cols[headerIndex.get('phone') ?? -1]);
+    } else if (format === 'kaggle') {
+      // Kaggle: Brand,Store Number,Store Name,Ownership Type,Street Address,City,State/Province,Country,Postcode,Phone Number,Timezone,Longitude,Latitude
+      lat = ensureNumber(cols[headerIndex.get('latitude') ?? -1]);
+      lng = ensureNumber(cols[headerIndex.get('longitude') ?? -1]);
+      name = ensureString(cols[headerIndex.get('store name') ?? -1]);
+      address = ensureString(cols[headerIndex.get('street address') ?? -1]);
+      city = ensureString(cols[headerIndex.get('city') ?? -1]);
+      state = ensureString(cols[headerIndex.get('state/province') ?? -1]) ?? ensureString(cols[headerIndex.get('state') ?? -1]);
+      phone = ensureString(cols[headerIndex.get('phone number') ?? -1]);
+    } else if (format === 'simple') {
+      // Simple: longitude,latitude,name,address,city,state,phone
+      lng = ensureNumber(cols[headerIndex.get('longitude') ?? 0]);
+      lat = ensureNumber(cols[headerIndex.get('latitude') ?? 1]);
+      name = ensureString(cols[headerIndex.get('name') ?? 2]);
+      address = ensureString(cols[headerIndex.get('address') ?? 3]);
+      city = ensureString(cols[headerIndex.get('city') ?? 4]);
+      state = ensureString(cols[headerIndex.get('state') ?? 5]);
+      phone = ensureString(cols[headerIndex.get('phone') ?? 6]);
+    } else {
+      // Unknown format - try to parse by position
+      // Assume: lng, lat, name, address (or similar)
+      lng = ensureNumber(cols[0]);
+      lat = ensureNumber(cols[1]);
+      name = ensureString(cols[2]);
+      address = ensureString(cols[3]);
+      city = ensureString(cols[4]);
+      state = ensureString(cols[5]);
+      phone = ensureString(cols[6]);
+    }
+
+    if (lat === null || lng === null) continue;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    // Basic sanity check for US coordinates
+    if (lat < 24 || lat > 50 || lng < -125 || lng > -66) continue;
+
+    pois.push({
+      id,
+      category,
+      name: name ?? category.charAt(0).toUpperCase() + category.slice(1),
+      address,
+      city,
+      state,
+      phone,
+      latitude: lat,
+      longitude: lng,
+    });
+    id += 1;
+  }
+
+  return pois;
+}
+
+async function loadRechargePOIs(): Promise<RechargePOI[]> {
+  if (rechargePoisPromise) return rechargePoisPromise;
+
+  rechargePoisPromise = (async () => {
+    const allPois: RechargePOI[] = [];
+
+    for (const category of ['mcdonalds', 'starbucks'] as const) {
+      const csvPath = await findRechargePOICsvPath(category);
+      if (!csvPath) {
+        console.log(`${category} CSV not found; skipping`);
+        continue;
+      }
+
+      try {
+        const buffer = await fs.readFile(csvPath);
+        let text = buffer.toString('utf8');
+        if (text.includes('\uFFFD')) {
+          text = buffer.toString('latin1');
+        }
+        text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+        const pois = parseRechargePOICsv(text, category);
+        console.log(`Loaded ${pois.length} ${category} locations from ${csvPath}`);
+        allPois.push(...pois);
+      } catch (error) {
+        console.error(`Failed to load ${category} POIs:`, error);
+      }
+    }
+
+    return allPois;
+  })().catch((error) => {
+    console.error('Failed to load recharge POIs:', error);
+    return [];
+  });
+
+  return rechargePoisPromise;
+}
+
+async function getRechargePOIsAlongRoute(options: {
+  geometry: [number, number][];
+  routeDistanceMeters: number;
+  corridorMiles: number;
+}): Promise<RechargePOIAlongRoute[]> {
+  const allPois = await loadRechargePOIs();
+  if (allPois.length === 0) return [];
+
+  // Use the larger corridor for bounding box, then filter per-category
+  const maxCorridorMiles = Math.max(...Object.values(RECHARGE_POI_CORRIDOR_LIMITS));
+  const maxCorridorMeters = milesToMeters(maxCorridorMiles);
+
+  const bounds = computeBounds(options.geometry, maxCorridorMeters);
+  const routeIndex = buildRouteIndex(options.geometry, options.routeDistanceMeters);
+
+  const matches: RechargePOIAlongRoute[] = [];
+
+  for (const poi of allPois) {
+    if (!Number.isFinite(poi.latitude) || !Number.isFinite(poi.longitude)) continue;
+    if (poi.latitude < bounds.minLat || poi.latitude > bounds.maxLat) continue;
+    if (poi.longitude < bounds.minLng || poi.longitude > bounds.maxLng) continue;
+
+    const projection = projectPointOntoRoute(poi.latitude, poi.longitude, routeIndex);
+    if (!projection) continue;
+
+    // Apply per-category distance limit
+    const categoryLimitMiles = RECHARGE_POI_CORRIDOR_LIMITS[poi.category];
+    const categoryLimitMeters = milesToMeters(categoryLimitMiles);
+    if (projection.distanceToRouteMeters > categoryLimitMeters) continue;
+
+    matches.push({
+      ...poi,
+      distance_to_route_miles: metersToMiles(projection.distanceToRouteMeters),
+      distance_along_route_miles: metersToMiles(projection.distanceAlongRouteMeters),
+    });
+  }
+
+  matches.sort((a, b) => a.distance_along_route_miles - b.distance_along_route_miles);
+  return matches;
 }
 
 function degreesToRadians(degrees: number): number {
@@ -1769,6 +2015,15 @@ router.post('/', async (req, res) => {
         });
       } catch (error) {
         console.warn('Failed to compute truck stops along route:', error);
+      }
+      try {
+        responseBody.recharge_pois = await getRechargePOIsAlongRoute({
+          geometry: chosen.geometry,
+          routeDistanceMeters: chosen.summary.distance_meters,
+          corridorMiles: corridorMilesUsed,
+        });
+      } catch (error) {
+        console.warn('Failed to compute recharge POIs along route:', error);
       }
       responseBody.corridor_miles = corridorMilesUsed;
       responseBody.stations = chosenStations ?? [];

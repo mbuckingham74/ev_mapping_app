@@ -3,7 +3,7 @@ import { CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, Tooltip
 import L from 'leaflet';
 import { createSavedRoute, fetchMe, fetchRoute, fetchSavedRoute, fetchSavedRoutes, fetchStations, fetchStationCount, login, logout, signup, updatePreferences } from './services/api';
 import type { Station } from './types/station';
-import type { RouteResponse, RouteStation, TruckStopAlongRoute } from './types/route';
+import type { RouteResponse, RouteStation, TruckStopAlongRoute, RechargePOIAlongRoute, RechargePOICategory } from './types/route';
 import type { SavedRoute } from './types/savedRoute';
 import RoutePlanner from './components/RoutePlanner';
 import AuthModal from './components/AuthModal';
@@ -55,6 +55,8 @@ const START_ICON = createPinIcon({ fill: '#22c55e', stroke: '#14532d' });
 const END_ICON = createPinIcon({ fill: '#ef4444', stroke: '#7f1d1d' });
 const TRUCK_STOP_ICON = createPinIcon({ fill: '#f97316', stroke: '#9a3412' });
 const MUST_STOP_ICON = createPinIcon({ fill: '#facc15', stroke: '#92400e' });
+const MCDONALDS_ICON = createPinIcon({ fill: '#fbbf24', stroke: '#b45309' }); // Yellow/gold
+const STARBUCKS_ICON = createPinIcon({ fill: '#10b981', stroke: '#065f46' }); // Green
 
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795]; // Center of US
 const DEFAULT_ZOOM = 4;
@@ -423,6 +425,7 @@ function App() {
   const [mapZoom, setMapZoom] = useState<number>(DEFAULT_ZOOM);
   const [selectedStationId, setSelectedStationId] = useState<number | null>(null);
   const [selectedTruckStopBrands, setSelectedTruckStopBrands] = useState<Set<string>>(() => new Set());
+  const [selectedRechargePOICategories, setSelectedRechargePOICategories] = useState<Set<RechargePOICategory>>(() => new Set());
   const [showMustStopsOnly, setShowMustStopsOnly] = useState<boolean>(false);
   const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
   const [savedRoutesLoading, setSavedRoutesLoading] = useState(false);
@@ -481,9 +484,31 @@ function App() {
     return routeTruckStops.filter((stop) => selectedTruckStopBrands.has(stop.brand));
   }, [route, routeTruckStops, selectedTruckStopBrands]);
 
+  // Recharge POIs (McDonald's, Starbucks)
+  const routeRechargePOIs = useMemo<RechargePOIAlongRoute[]>(() => {
+    return route?.recharge_pois ?? [];
+  }, [route]);
+
+  const rechargePOICategoryCounts = useMemo(() => {
+    const counts = new Map<RechargePOICategory, number>();
+    for (const poi of routeRechargePOIs) {
+      counts.set(poi.category, (counts.get(poi.category) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => a.category.localeCompare(b.category));
+  }, [routeRechargePOIs]);
+
+  const visibleRechargePOIs = useMemo(() => {
+    if (!route) return [];
+    if (selectedRechargePOICategories.size === 0) return [];
+    return routeRechargePOIs.filter((poi) => selectedRechargePOICategories.has(poi.category));
+  }, [route, routeRechargePOIs, selectedRechargePOICategories]);
+
   useEffect(() => {
     if (!route) {
       setSelectedTruckStopBrands(new Set());
+      setSelectedRechargePOICategories(new Set());
       return;
     }
     // Only select brands that are both in the route AND in our default set
@@ -492,6 +517,8 @@ function App() {
       [...routeBrands].filter((brand) => DEFAULT_TRUCK_STOP_BRANDS.has(brand))
     );
     setSelectedTruckStopBrands(defaultsInRoute);
+    // Recharge POIs default to none selected (user opt-in)
+    setSelectedRechargePOICategories(new Set());
   }, [route]);
 
   function toggleTruckStopBrand(brand: string) {
@@ -509,6 +536,23 @@ function App() {
       return;
     }
     setSelectedTruckStopBrands(new Set(truckStopBrandCounts.map((b) => b.brand)));
+  }
+
+  function toggleRechargePOICategory(category: RechargePOICategory) {
+    setSelectedRechargePOICategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
+  }
+
+  function setAllRechargePOICategories(selectAll: boolean) {
+    if (!selectAll) {
+      setSelectedRechargePOICategories(new Set());
+      return;
+    }
+    setSelectedRechargePOICategories(new Set(rechargePOICategoryCounts.map((c) => c.category)));
   }
 
   const autoWaypointIds = useMemo(() => {
@@ -914,6 +958,12 @@ function App() {
             selectedTruckStopBrands={selectedTruckStopBrands}
             onToggleTruckStopBrand={toggleTruckStopBrand}
             onSetAllTruckStopBrands={setAllTruckStopBrands}
+            rechargePOICategoryCounts={rechargePOICategoryCounts}
+            rechargePOITotalCount={routeRechargePOIs.length}
+            rechargePOIVisibleCount={visibleRechargePOIs.length}
+            selectedRechargePOICategories={selectedRechargePOICategories}
+            onToggleRechargePOICategory={toggleRechargePOICategory}
+            onSetAllRechargePOICategories={setAllRechargePOICategories}
             mustStopStationIds={mustStopStationIds}
             showMustStopsOnly={showMustStopsOnly}
             onSetShowMustStopsOnly={setShowMustStopsOnly}
@@ -1030,6 +1080,34 @@ function App() {
                         ) : null}
                         <p><strong>Off-route:</strong> {formatMiles(stop.distance_to_route_miles)} mi</p>
                         <p><strong>Mile marker:</strong> {formatMiles(stop.distance_along_route_miles)} mi</p>
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+
+              {visibleRechargePOIs.map((poi) => (
+                <Marker
+                  key={`recharge-poi-${poi.category}-${poi.id}`}
+                  position={[poi.latitude, poi.longitude]}
+                  icon={poi.category === 'mcdonalds' ? MCDONALDS_ICON : STARBUCKS_ICON}
+                >
+                  <Popup>
+                    <div className="min-w-[220px]">
+                      <h3 className="font-bold text-slate-900">{poi.name}</h3>
+                      <p className="text-slate-600 text-sm">
+                        <strong>{poi.category === 'mcdonalds' ? "McDonald's" : 'Starbucks'}</strong>
+                        {poi.city && poi.state ? ` • ${poi.city}, ${poi.state}` : ''}
+                      </p>
+                      <div className="mt-2 text-sm">
+                        {poi.address && (
+                          <p><strong>Address:</strong> {poi.address}</p>
+                        )}
+                        {poi.phone && (
+                          <p><strong>Phone:</strong> {poi.phone}</p>
+                        )}
+                        <p><strong>Off-route:</strong> {formatMiles(poi.distance_to_route_miles)} mi</p>
+                        <p><strong>Mile marker:</strong> {formatMiles(poi.distance_along_route_miles)} mi</p>
                       </div>
                     </div>
                   </Popup>

@@ -49,6 +49,22 @@ export type TruckStopAlongRoute = {
   distance_along_route_miles: number;
 };
 
+export type RechargePOICategory = 'mcdonalds' | 'starbucks';
+
+export type RechargePOIAlongRoute = {
+  id: number;
+  category: RechargePOICategory;
+  name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  phone: string | null;
+  latitude: number;
+  longitude: number;
+  distance_to_route_miles: number;
+  distance_along_route_miles: number;
+};
+
 export type RouteResponse = {
   points: RoutePoint[];
   summary: RouteSummary;
@@ -56,6 +72,7 @@ export type RouteResponse = {
   corridor_miles?: number;
   stations?: RouteStation[];
   truck_stops?: TruckStopAlongRoute[];
+  recharge_pois?: RechargePOIAlongRoute[];
   auto_waypoints?: AutoWaypoint[];
   preference?: 'fastest' | 'charger_optimized';
   requested_preference?: 'fastest' | 'charger_optimized';

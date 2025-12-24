@@ -62,6 +62,35 @@ const METERS_PER_MILE = 1609.344;
 const MUST_STOP_GAP_MILES = 120;
 const MUST_STOP_AFTER_MILES = 50;
 
+// Default truck stop brands to show on route (major chains)
+const DEFAULT_TRUCK_STOP_BRANDS = new Set([
+  // Love's
+  "Love's CS",
+  "Love's TS",
+  "Loves TS",
+  // Pilot / Flying J
+  "Flying J Cardlock",
+  "Flying J Dealer",
+  "Flying J Licensed Location",
+  "Flying J Licensee",
+  "Flying J Travel Center",
+  "Pilot Cardlock Licensed Location",
+  "Pilot Dealer",
+  "Pilot Express",
+  "Pilot Licensed Location",
+  "Pilot Licensed Location Bosselman",
+  "Pilot Licensed Location:Bosselman",
+  "Pilot Licensed Location:Town Pump",
+  "Pilot Thomas Cardlock",
+  "Pilot Travel Center",
+  "Shell Flying J Dealer",
+  // TA + Petro
+  "TA Express",
+  "Petro",
+  // Road Ranger
+  "Road Ranger",
+]);
+
 type RoutePlanParams = {
   start: string;
   end: string;
@@ -461,8 +490,12 @@ function App() {
       setSelectedTruckStopBrands(new Set());
       return;
     }
-    const brands = new Set((route.truck_stops ?? []).map((s) => s.brand).filter(Boolean));
-    setSelectedTruckStopBrands(brands);
+    // Only select brands that are both in the route AND in our default set
+    const routeBrands = new Set((route.truck_stops ?? []).map((s) => s.brand).filter(Boolean));
+    const defaultsInRoute = new Set(
+      [...routeBrands].filter((brand) => DEFAULT_TRUCK_STOP_BRANDS.has(brand))
+    );
+    setSelectedTruckStopBrands(defaultsInRoute);
   }, [route]);
 
   function toggleTruckStopBrand(brand: string) {

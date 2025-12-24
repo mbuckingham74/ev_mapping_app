@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { RouteResponse, RouteStation } from '../types/route';
 import type { SavedRoute } from '../types/savedRoute';
 

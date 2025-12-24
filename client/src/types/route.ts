@@ -65,6 +65,26 @@ export type RechargePOIAlongRoute = {
   distance_along_route_miles: number;
 };
 
+export type WeatherPoint = {
+  latitude: number;
+  longitude: number;
+  distance_along_route_miles: number;
+  estimated_arrival_iso: string;
+  temperature_f: number;
+  feels_like_f: number;
+  condition: string;
+  icon: string;
+  wind_speed_mph: number;
+  wind_gust_mph: number | null;
+  wind_direction: number;
+  humidity: number;
+  precip_prob: number;
+  precip_inches: number | null;
+  visibility_miles: number | null;
+  cloud_cover: number;
+  location_name?: string;
+};
+
 export type RouteResponse = {
   points: RoutePoint[];
   summary: RouteSummary;
@@ -73,6 +93,7 @@ export type RouteResponse = {
   stations?: RouteStation[];
   truck_stops?: TruckStopAlongRoute[];
   recharge_pois?: RechargePOIAlongRoute[];
+  weather?: WeatherPoint[];
   auto_waypoints?: AutoWaypoint[];
   preference?: 'fastest' | 'charger_optimized';
   requested_preference?: 'fastest' | 'charger_optimized';

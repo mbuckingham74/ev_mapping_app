@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { RouteResponse, RouteStation, TruckStopAlongRoute, RechargePOICategory } from '../types/route';
+import type { RouteResponse, RouteStation, TruckStopAlongRoute, RechargePOICategory, WeatherPoint } from '../types/route';
 import type { SavedRoute } from '../types/savedRoute';
+import { WeatherTimeline, WeatherBadge } from './WeatherTimeline';
 
 type Props = {
   route: RouteResponse | null;
   loading: boolean;
   error: string | null;
   selectedStationId?: number | null;
+  weather?: WeatherPoint[];
   truckStopBrandCounts?: Array<{ brand: string; count: number }>;
   truckStopTotalCount?: number;
   truckStopVisibleCount?: number;
@@ -287,6 +289,7 @@ export default function RoutePlanner({
   loading,
   error,
   selectedStationId,
+  weather,
   truckStopBrandCounts,
   truckStopTotalCount,
   truckStopVisibleCount,
@@ -337,6 +340,24 @@ export default function RoutePlanner({
 
   const routeStations = useMemo(() => route?.stations ?? [], [route]);
   const mustStopCount = useMemo(() => mustStopStationIds?.size ?? 0, [mustStopStationIds]);
+
+  // Find the closest weather point for a given station based on distance along route
+  const getStationWeather = useMemo(() => {
+    if (!weather || weather.length === 0) return () => undefined;
+    return (stationMiles: number): WeatherPoint | undefined => {
+      let closest: WeatherPoint | undefined;
+      let minDiff = Infinity;
+      for (const wp of weather) {
+        const diff = Math.abs(wp.distance_along_route_miles - stationMiles);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closest = wp;
+        }
+      }
+      // Only return if within 50 miles of a weather point
+      return minDiff <= 50 ? closest : undefined;
+    };
+  }, [weather]);
 
   const gapAlert = useMemo(() => {
     if (!route || typeof route.max_gap_miles !== 'number' || !Number.isFinite(route.max_gap_miles)) return null;
@@ -801,6 +822,12 @@ export default function RoutePlanner({
           </div>
         )}
 
+        {route && weather && weather.length > 0 && (
+          <div className="text-xs text-slate-200 bg-slate-800/40 border border-slate-700 rounded-md px-3 py-2">
+            <WeatherTimeline weather={weather} />
+          </div>
+        )}
+
         {route && route.points.length >= 2 && (
           <NavigateSection
             route={route}
@@ -1156,8 +1183,9 @@ export default function RoutePlanner({
                       </div>
                     </div>
                     <div className="mt-0.5 flex justify-between gap-3 text-slate-400">
-                      <div className="truncate">
-                        {station.city}, {station.state}
+                      <div className="truncate flex items-center gap-2">
+                        <span>{station.city}, {station.state}</span>
+                        <WeatherBadge weather={getStationWeather(station.distance_along_route_miles)} />
                       </div>
                       <div className="shrink-0">
                         off-route {formatMiles(station.distance_to_route_miles)}

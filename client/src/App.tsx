@@ -3,7 +3,7 @@ import { CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, Tooltip
 import L from 'leaflet';
 import { createSavedRoute, fetchMe, fetchRoute, fetchSavedRoute, fetchSavedRoutes, fetchStations, fetchStationCount, login, logout, signup, updatePreferences } from './services/api';
 import type { Station } from './types/station';
-import type { RouteResponse, RouteStation, TruckStopAlongRoute, RechargePOIAlongRoute, RechargePOICategory } from './types/route';
+import type { RouteResponse, RouteStation, TruckStopAlongRoute, RechargePOIAlongRoute, RechargePOICategory, WeatherPoint } from './types/route';
 import type { SavedRoute } from './types/savedRoute';
 import RoutePlanner from './components/RoutePlanner';
 import AuthModal from './components/AuthModal';
@@ -465,6 +465,10 @@ function App() {
 
   const routeTruckStops = useMemo<TruckStopAlongRoute[]>(() => {
     return route?.truck_stops ?? [];
+  }, [route]);
+
+  const routeWeather = useMemo<WeatherPoint[]>(() => {
+    return route?.weather ?? [];
   }, [route]);
 
   const truckStopBrandCounts = useMemo(() => {
@@ -951,6 +955,7 @@ function App() {
             onClearRoute={handleClearRoute}
             onSelectStation={handleSelectStation}
             selectedStationId={selectedStationId}
+            weather={routeWeather}
             truckStopBrandCounts={truckStopBrandCounts}
             truckStopTotalCount={routeTruckStops.length}
             truckStopVisibleCount={visibleTruckStops.length}

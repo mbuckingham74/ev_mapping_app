@@ -46,6 +46,7 @@ type RouteResponse = {
   stations?: StationAlongRoute[];
   truck_stops?: TruckStopAlongRoute[];
   recharge_pois?: RechargePOIAlongRoute[];
+  weather?: WeatherPoint[];
   auto_waypoints?: AutoWaypoint[];
   preference?: 'fastest' | 'charger_optimized';
   requested_preference?: 'fastest' | 'charger_optimized';
@@ -89,6 +90,27 @@ type RechargePOI = {
 type RechargePOIAlongRoute = RechargePOI & {
   distance_to_route_miles: number;
   distance_along_route_miles: number;
+};
+
+// Weather data for points along the route
+type WeatherPoint = {
+  latitude: number;
+  longitude: number;
+  distance_along_route_miles: number;
+  estimated_arrival_iso: string;
+  temperature_f: number;
+  feels_like_f: number;
+  condition: string;
+  icon: string;
+  wind_speed_mph: number;
+  wind_gust_mph: number | null;
+  wind_direction: number;
+  humidity: number;
+  precip_prob: number;
+  precip_inches: number | null;
+  visibility_miles: number | null;
+  cloud_cover: number;
+  location_name?: string;
 };
 
 type StationRow = {
@@ -574,6 +596,204 @@ async function getRechargePOIsAlongRoute(options: {
 
   matches.sort((a, b) => a.distance_along_route_miles - b.distance_along_route_miles);
   return matches;
+}
+
+// Weather along route functionality
+const VISUAL_CROSSING_API_KEY = process.env.VISUAL_CROSSING_API_KEY || '';
+const WEATHER_SAMPLE_INTERVAL_MILES = 100;
+const WEATHER_DEDUP_THRESHOLD_MILES = 15;
+
+type VisualCrossingHour = {
+  datetime: string;
+  temp: number;
+  feelslike: number;
+  humidity: number;
+  precip: number | null;
+  precipprob: number;
+  windspeed: number;
+  windgust: number | null;
+  winddir: number;
+  cloudcover: number;
+  visibility: number | null;
+  conditions: string;
+  icon: string;
+};
+
+type VisualCrossingDay = {
+  datetime: string;
+  hours: VisualCrossingHour[];
+};
+
+type VisualCrossingResponse = {
+  days: VisualCrossingDay[];
+};
+
+async function fetchVisualCrossingWeather(
+  lat: number,
+  lng: number,
+  date: string
+): Promise<VisualCrossingResponse | null> {
+  if (!VISUAL_CROSSING_API_KEY) return null;
+
+  const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${lat.toFixed(4)},${lng.toFixed(4)}/${date}?key=${VISUAL_CROSSING_API_KEY}&include=hours&unitGroup=us`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn(`Weather API returned ${response.status} for ${lat},${lng}`);
+      return null;
+    }
+    return (await response.json()) as VisualCrossingResponse;
+  } catch (error) {
+    console.warn('Weather API error:', error);
+    return null;
+  }
+}
+
+function findClosestHour(hours: VisualCrossingHour[], targetTime: Date): VisualCrossingHour | null {
+  if (!hours || hours.length === 0) return null;
+
+  const targetHour = targetTime.getUTCHours();
+  let closest = hours[0];
+  let minDiff = 24;
+
+  for (const hour of hours) {
+    const hourNum = parseInt(hour.datetime.split(':')[0], 10);
+    const diff = Math.abs(hourNum - targetHour);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = hour;
+    }
+  }
+
+  return closest;
+}
+
+async function getWeatherAlongRoute(options: {
+  geometry: [number, number][];
+  stations: StationAlongRoute[];
+  routeDistanceMeters: number;
+  durationSeconds: number;
+  departureTime?: Date;
+}): Promise<WeatherPoint[]> {
+  if (!VISUAL_CROSSING_API_KEY) {
+    console.log('VISUAL_CROSSING_API_KEY not set; skipping weather');
+    return [];
+  }
+
+  const { geometry, stations, routeDistanceMeters, durationSeconds, departureTime } = options;
+  const routeDistanceMiles = metersToMiles(routeDistanceMeters);
+  const departure = departureTime || new Date();
+
+  // Build sample points every WEATHER_SAMPLE_INTERVAL_MILES
+  const samplePoints: { lat: number; lng: number; distanceMiles: number; name: string }[] = [];
+
+  // Add origin
+  if (geometry.length > 0) {
+    samplePoints.push({
+      lat: geometry[0][1],
+      lng: geometry[0][0],
+      distanceMiles: 0,
+      name: 'Start',
+    });
+  }
+
+  // Add interval points
+  for (let miles = WEATHER_SAMPLE_INTERVAL_MILES; miles < routeDistanceMiles; miles += WEATHER_SAMPLE_INTERVAL_MILES) {
+    const fraction = miles / routeDistanceMiles;
+    const idx = Math.min(Math.floor(fraction * geometry.length), geometry.length - 1);
+    const point = geometry[idx];
+    if (point) {
+      samplePoints.push({
+        lat: point[1],
+        lng: point[0],
+        distanceMiles: miles,
+        name: `Mile ${miles}`,
+      });
+    }
+  }
+
+  // Add stations
+  for (const station of stations) {
+    samplePoints.push({
+      lat: station.latitude,
+      lng: station.longitude,
+      distanceMiles: station.distance_along_route_miles,
+      name: station.station_name,
+    });
+  }
+
+  // Add destination
+  if (geometry.length > 1) {
+    samplePoints.push({
+      lat: geometry[geometry.length - 1][1],
+      lng: geometry[geometry.length - 1][0],
+      distanceMiles: routeDistanceMiles,
+      name: 'Destination',
+    });
+  }
+
+  // Sort by distance and deduplicate points too close together
+  samplePoints.sort((a, b) => a.distanceMiles - b.distanceMiles);
+  const dedupedPoints: typeof samplePoints = [];
+  for (const point of samplePoints) {
+    const lastPoint = dedupedPoints[dedupedPoints.length - 1];
+    if (!lastPoint || point.distanceMiles - lastPoint.distanceMiles >= WEATHER_DEDUP_THRESHOLD_MILES) {
+      dedupedPoints.push(point);
+    } else if (point.name !== `Mile ${Math.round(point.distanceMiles / 100) * 100}`) {
+      // Prefer named points (stations) over mile markers
+      dedupedPoints[dedupedPoints.length - 1] = point;
+    }
+  }
+
+  // Calculate arrival times and fetch weather
+  const avgSpeedMph = routeDistanceMiles / (durationSeconds / 3600);
+  const weatherPoints: WeatherPoint[] = [];
+
+  // Fetch weather in parallel (batch of up to 10 at a time to avoid overwhelming API)
+  const batchSize = 10;
+  for (let i = 0; i < dedupedPoints.length; i += batchSize) {
+    const batch = dedupedPoints.slice(i, i + batchSize);
+    const promises = batch.map(async (point) => {
+      const hoursToArrival = point.distanceMiles / avgSpeedMph;
+      const arrivalTime = new Date(departure.getTime() + hoursToArrival * 3600 * 1000);
+      const dateStr = arrivalTime.toISOString().split('T')[0];
+
+      const weatherData = await fetchVisualCrossingWeather(point.lat, point.lng, dateStr);
+      if (!weatherData || !weatherData.days || weatherData.days.length === 0) return null;
+
+      const day = weatherData.days[0];
+      const hour = findClosestHour(day.hours, arrivalTime);
+      if (!hour) return null;
+
+      return {
+        latitude: point.lat,
+        longitude: point.lng,
+        distance_along_route_miles: point.distanceMiles,
+        estimated_arrival_iso: arrivalTime.toISOString(),
+        temperature_f: hour.temp,
+        feels_like_f: hour.feelslike,
+        condition: hour.conditions,
+        icon: hour.icon,
+        wind_speed_mph: hour.windspeed,
+        wind_gust_mph: hour.windgust,
+        wind_direction: hour.winddir,
+        humidity: hour.humidity,
+        precip_prob: hour.precipprob,
+        precip_inches: hour.precip,
+        visibility_miles: hour.visibility,
+        cloud_cover: hour.cloudcover,
+        location_name: point.name,
+      } satisfies WeatherPoint;
+    });
+
+    const results = await Promise.all(promises);
+    for (const result of results) {
+      if (result) weatherPoints.push(result);
+    }
+  }
+
+  return weatherPoints;
 }
 
 function degreesToRadians(degrees: number): number {
@@ -2024,6 +2244,16 @@ router.post('/', async (req, res) => {
         });
       } catch (error) {
         console.warn('Failed to compute recharge POIs along route:', error);
+      }
+      try {
+        responseBody.weather = await getWeatherAlongRoute({
+          geometry: chosen.geometry,
+          stations: chosenStations ?? [],
+          routeDistanceMeters: chosen.summary.distance_meters,
+          durationSeconds: chosen.summary.duration_seconds,
+        });
+      } catch (error) {
+        console.warn('Failed to fetch weather along route:', error);
       }
       responseBody.corridor_miles = corridorMilesUsed;
       responseBody.stations = chosenStations ?? [];

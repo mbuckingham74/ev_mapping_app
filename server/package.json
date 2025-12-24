@@ -9,7 +9,8 @@
     "migrate": "node dist/scripts/migrate.js",
     "migrate:dev": "tsx src/scripts/migrate.ts",
     "start": "node dist/index.js",
-    "fetch:stations": "tsx src/scripts/fetch-stations.ts"
+    "fetch:stations": "tsx src/scripts/fetch-stations.ts",
+    "fetch:stations:prod": "node dist/scripts/fetch-stations.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

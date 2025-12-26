@@ -1234,7 +1234,8 @@ async function directionsOrsWithAlternatives(options: {
     radiuses: options.coordinates.map(() => 5000), // 5km snap radius for each point
   };
 
-  if (options.includeAlternatives) {
+  // ORS only supports alternative_routes with exactly 2 coordinates (start + end)
+  if (options.includeAlternatives && options.coordinates.length === 2) {
     body.alternative_routes = {
       target_count: 3,
       weight_factor: 1.8,

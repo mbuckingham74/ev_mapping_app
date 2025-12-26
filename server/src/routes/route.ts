@@ -1231,6 +1231,7 @@ async function directionsOrsWithAlternatives(options: {
     coordinates: options.coordinates.map(([lng, lat]) => [lng, lat]),
     instructions: false,
     elevation: true,
+    radiuses: options.coordinates.map(() => 5000), // 5km snap radius for each point
   };
 
   if (options.includeAlternatives) {
